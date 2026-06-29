@@ -2,49 +2,31 @@
 <html>
 <head>
   <title>BasementBall</title>
-
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- ✅ REAL SCRIPT TAGS -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: black;
       color: white;
       font-family: Arial;
-      overflow: hidden;
+      text-align: center;
     }
 
     #message {
-      position: absolute;
-      top: 40px;
-      width: 100%;
-      text-align: center;
+      margin-top: 40px;
       font-size: 28px;
-      z-index: 5;
     }
 
-    #startBtn {
-      position: absolute;
-      top: 120px;
-      left: 50%;
-      transform: translateX(-50%);
+    button {
+      margin-top: 20px;
       font-size: 22px;
       padding: 12px 20px;
-      z-index: 10;
-    }
-
-    canvas {
-      width: 100vw;
-      height: 100vh;
     }
 
     video {
-      position: absolute;
-      opacity: 0;
+      width: 100%;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -52,50 +34,33 @@
 <body>
 
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
-<button id="startBtn">START</button>
 
-<video id="video" playsinline autoplay muted></video>
-<canvas id="canvas"></canvas>
+<button onclick="start()">START</button>
+
+<video id="video" playsinline></video>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const message = document.getElementById("message");
-const startBtn = document.getElementById("startBtn");
+async function start() {
+  const message = document.getElementById("message");
+  const video = document.getElementById("video");
 
-// ✅ CLICK HANDLER
-startBtn.onclick = async () => {
-  startBtn.style.display = "none";
-  message.innerText = "Starting camera...";
+  message.innerText = "Requesting camera...";
 
   try {
+    // ✅ EXACT same pattern as working test
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true
     });
 
     video.srcObject = stream;
-    await video.play();
-
-    await new Promise(r => video.onloadedmetadata = r);
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
 
     message.innerText = "Camera Ready ✅";
 
-    function loop() {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      requestAnimationFrame(loop);
-    }
-
-    loop();
-
   } catch (err) {
     message.innerText = "Camera failed ❌";
-    console.error(err);
+    console.log(err);
   }
-};
+}
 </script>
 
 </body>
