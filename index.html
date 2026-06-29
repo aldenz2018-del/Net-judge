@@ -8,7 +8,7 @@
 <style>
 body {
   margin: 0;
-  background: green;
+  background: pink;
   text-align: center;
   font-family: Arial;
 }
@@ -40,7 +40,7 @@ video {
 
 <body>
 
-<div id="message">Tap START</div>
+<div id="message">Happy 11th Birthday Mattie!</div>
 <button id="startBtn">START</button>
 
 <video id="video" playsinline muted></video>
@@ -59,28 +59,31 @@ let ropeY = 0;
 let lastMotionY = null;
 let lastTrigger = 0;
 
-// ✅ VERY SIMPLE START (this will work)
+// 🔊 sound
+function speakFault() {
+  const s = new SpeechSynthesisUtterance("Fault");
+  speechSynthesis.cancel();
+  speechSynthesis.speak(s);
+}
+
+// ✅ START (stable)
 startBtn.onclick = function () {
 
   message.innerText = "Requesting camera...";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" } // ✅ back camera directly
+    video: { facingMode: "environment" } // ✅ back camera
   })
   .then(stream => {
 
-    message.innerText = "Starting...";
-
     video.srcObject = stream;
-
     return video.play();
   })
   .then(() => {
 
-    // ✅ wait a moment for video to actually be ready
+    // ✅ delay fixes blank screen + iPhone timing
     setTimeout(() => {
 
-      // ✅ IMPORTANT: force correct sizing
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
 
@@ -90,24 +93,22 @@ startBtn.onclick = function () {
       startBtn.style.display = "none";
       message.innerText = "";
 
-      previousFrame = null;
-
       loop();
 
-    }, 500); // ← slightly longer delay fixes blank screen
-
+    }, 500);
   })
-  .catch(err => {
+  .catch(() => {
     message.innerText = "Camera blocked ❌";
-    console.log(err);
   });
 };
-// ✅ DETECTION LOOP
+
+
+// ✅ LOOP
 function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // draw rope
+  // rope line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -119,8 +120,9 @@ function loop() {
 
   if (previousFrame) {
 
+    let motionBelow = 0;
+    let totalMotion = 0;
     let motionY = 0;
-    let count = 0;
 
     const curr = frame.data;
     const prev = previousFrame.data;
@@ -133,39 +135,38 @@ function loop() {
       const x = pixelIndex % canvas.width;
       const y = Math.floor(pixelIndex / canvas.width);
 
-      // ✅ center only
-      if (Math.abs(x - centerX) > 80) continue;
-
-      // ✅ under rope only
-      if (y < ropeY) continue;
-
       const diff =
         Math.abs(curr[i] - prev[i]) +
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
-      if (diff > 60) {
-        motionY += y;
-        count++;
+      if (diff > 80) { // ✅ higher threshold
+
+        totalMotion++;
+
+        // ✅ only center zone
+        if (Math.abs(x - centerX) < 80 && y >= ropeY) {
+          motionBelow++;
+          motionY += y;
+        }
       }
     }
 
-    if (count > 100) {
+    // ✅ FILTER: ignore full-frame shake
+    if (motionBelow > 200 && totalMotion < 2000) {
 
-      const avgY = motionY / count;
+      const avgY = motionY / motionBelow;
 
       if (lastMotionY !== null) {
-
         const speed = Math.abs(avgY - lastMotionY);
 
-        // ✅ FAST ONLY (no running/shake)
+        // ✅ trigger only FAST motion
         if (speed > 20 && Date.now() - lastTrigger > 2000) {
 
           document.body.style.background = "red";
           message.innerText = "FAULT";
 
-          const s = new SpeechSynthesisUtterance("Fault");
-          speechSynthesis.speak(s);
+          speakFault();
 
           lastTrigger = Date.now();
 
