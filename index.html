@@ -1,53 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BasementBall</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <style>
-    body {
-      margin: 0;
-      background: pink;
-      color: black;
-      font-family: Arial;
-      text-align: center;
-    }
+<title>BasementBall</title>
 
-    #message {
-      margin-top: 20px;
-      font-size: 32px;
-      font-weight: bold;
-    }
+<style>
+body {
+  margin: 0;
+  background: pink;
+  color: black;
+  font-family: Arial;
+  text-align: center;
+}
 
-    button {
-      margin-top: 15px;
-      font-size: 24px;
-      padding: 15px 25px;
-    }
+#message {
+  margin-top: 20px;
+  font-size: 32px;
+  font-weight: bold;
+}
 
-    #stopBtn {
-      background: red;
-      color: white;
-      display: none;
-    }
+button {
+  margin-top: 15px;
+  font-size: 24px;
+  padding: 15px 25px;
+}
 
-    canvas {
-      width: 100%;
-    }
+#stopBtn {
+  background: red;
+  color: white;
+  display: none;
+}
 
-    /* hide raw camera feed */
-    video {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-    }
-  </style>
+canvas {
+  width: 100%;
+  display: none;
+}
+
+video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+</style>
+
 </head>
 
 <body>
 
-<div id="message">Happy 11th Birthday Mattie!</div>
+<div id="message">Tap START</div>
 
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
@@ -63,13 +65,16 @@ let animationId;
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
 let previousFrame = null;
 let ropeY = 0;
-let lastFaultTime = 0;
+
+let lastTriggerTime = 0;
+const COOLDOWN = 2000; // 2 seconds
 
 // ✅ voice
 function speakFault() {
@@ -78,26 +83,28 @@ function speakFault() {
   window.speechSynthesis.speak(s);
 }
 
-// ✅ START (FIXED + RELIABLE)
-startBtn.onclick = async () => {
-  startBtn.disabled = true;
-  message.innerText = "Tap Allow";
+// ✅ START
+startBtn.addEventListener("click", function () {
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
-    });
+  startBtn.disabled = true;
+  message.innerText = "Requesting camera...";
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" } // ✅ BACK CAMERA
+  })
+  .then(function(stream) {
 
     message.innerText = "Starting...";
 
     streamRef = stream;
     video.srcObject = stream;
 
-    // ✅ must happen after click
-    await video.play();
+    return video.play();
+  })
+  .then(function() {
 
-    // ✅ small delay prevents Safari hang
-    setTimeout(() => {
+    setTimeout(function() {
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
@@ -106,26 +113,31 @@ startBtn.onclick = async () => {
       previousFrame = null;
       running = true;
 
+      canvas.style.display = "block";
+
       startBtn.style.display = "none";
       stopBtn.style.display = "inline-block";
       message.innerText = "";
 
       loop();
+
     }, 200);
 
-  } catch (err) {
+  })
+  .catch(function(err) {
     message.innerText = "Camera blocked ❌";
     startBtn.disabled = false;
     console.error(err);
-  }
-};
+  });
+});
 
 // ✅ STOP
-stopBtn.onclick = () => {
+stopBtn.onclick = function() {
+
   running = false;
 
   if (streamRef) {
-    streamRef.getTracks().forEach(track => track.stop());
+    streamRef.getTracks().forEach(t => t.stop());
     streamRef = null;
   }
 
@@ -137,6 +149,8 @@ stopBtn.onclick = () => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  canvas.style.display = "none";
+
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
   stopBtn.style.display = "none";
@@ -145,14 +159,13 @@ stopBtn.onclick = () => {
   document.body.style.background = "pink";
 };
 
-// ✅ MAIN LOOP
+// ✅ LOOP
 function loop() {
   if (!running) return;
 
-  // draw camera
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ rope line
+  // rope line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -163,16 +176,18 @@ function loop() {
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
-    const curr = frame.data;
-    const prev = previousFrame.data;
 
     let motionBelow = 0;
 
+    const curr = frame.data;
+    const prev = previousFrame.data;
+
     for (let i = 0; i < curr.length; i += 16) {
+
       const pixelIndex = i / 4;
       const y = Math.floor(pixelIndex / canvas.width);
 
-      // ✅ ONLY detect BELOW rope
+      // ONLY below rope
       if (y < ropeY) continue;
 
       const diff =
@@ -185,14 +200,23 @@ function loop() {
       }
     }
 
-    // ✅ trigger FAULT
-    if (motionBelow > 120) {
+    // ✅ only trigger if BIG motion spike
+    if (motionBelow > 300) {
 
-      if (Date.now() - lastFaultTime > 1500) {
+      if (Date.now() - lastTriggerTime > COOLDOWN) {
+
         document.body.style.background = "red";
         message.innerText = "FAULT";
+
         speakFault();
-        lastFaultTime = Date.now();
+
+        lastTriggerTime = Date.now();
+
+        // ✅ return to normal after 1.5 sec
+        setTimeout(() => {
+          document.body.style.background = "pink";
+          message.innerText = "";
+        }, 1500);
       }
     }
   }
