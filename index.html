@@ -4,13 +4,12 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <link rel="apple-touch-icon" href="icon.png">
   <style>
     body {
       margin: 0;
-      background: hot pink;
+      background: black;
       color: white;
-      font-family: ariel;
+      font-family: Arial;
       text-align: center;
     }
 
@@ -49,7 +48,7 @@
 
 <script>
 let running = false;
-let streamRef;
+let streamRef = null;
 let animationId;
 
 const video = document.getElementById("video");
@@ -59,31 +58,41 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-function speak(text) {
-  const speech = new SpeechSynthesisUtterance(text);
-  speech.lang = "en-US";
-  speech.rate = 1.0;
-  speech.pitch = 1.0;
-  window.speechSynthesis.speak(speech);
-}
-  
 // ✅ SETTINGS
 let lineX;
 let maxHeight;
-const lineWidth = 50; // ✅ requested width
+const lineWidth = 50;
 
 let previousFrame = null;
 
+// ✅ RESULT STATE
 let lastResult = null;
 let lastTime = 0;
-const GOOD_TIME = 2000;   // 2 seconds
-const FAULT_TIME = 5000;  // 5 seconds (longer!)
-  
-startBtn.onclick = start;
-stopBtn.onclick = stop;
+const GOOD_TIME = 2000;
+const FAULT_TIME = 5000;
 
-async function start() {
-  startBtn.disabled = false;
+// ✅ PREVENT FAULT SPAM
+let canSpeak = true;
+const SPEAK_COOLDOWN = 1500;
+
+// ✅ SPEAK FUNCTION
+function speakFault() {
+  if (!canSpeak) return;
+
+  const speech = new SpeechSynthesisUtterance("Fault");
+  speech.rate = 1.1;
+  speech.pitch = 1.0;
+  speech.volume = 1.0;
+
+  window.speechSynthesis.speak(speech);
+
+  canSpeak = false;
+  setTimeout(() => { canSpeak = true; }, SPEAK_COOLDOWN);
+}
+
+// ✅ START
+startBtn.onclick = async () => {
+  startBtn.disabled = true;
   message.innerText = "Starting camera...";
 
   try {
@@ -116,14 +125,21 @@ async function start() {
     console.error(err);
     startBtn.disabled = false;
   }
-}
+};
+
+// ✅ STOP
+stopBtn.onclick = stop;
 
 function stop() {
   running = false;
 
   if (streamRef) {
     streamRef.getTracks().forEach(track => track.stop());
+    streamRef = null;
   }
+
+  video.pause();
+  video.srcObject = null;
 
   cancelAnimationFrame(animationId);
 
@@ -140,16 +156,17 @@ function stop() {
   document.body.style.background = "black";
 }
 
+// ✅ MAIN LOOP
 function loop() {
   if (!running) return;
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ DRAW DETECTION ZONE (cyan)
+  // ✅ detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ DRAW CENTER LINE
+  // ✅ vertical line
   ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -157,7 +174,7 @@ function loop() {
   ctx.lineTo(lineX, canvas.height);
   ctx.stroke();
 
-  // ✅ DRAW HEIGHT LINE (red)
+  // ✅ height line
   ctx.strokeStyle = "red";
   ctx.beginPath();
   ctx.moveTo(0, maxHeight);
@@ -172,72 +189,4 @@ function loop() {
 
     let motionX = 0;
     let motionY = 0;
-    let count = 0;
-
-    // ✅ ONLY CHECK LINE ZONE
-    for (let i = 0; i < curr.length; i += 16) {
-
-      const pixelIndex = i / 4;
-      const x = pixelIndex % canvas.width;
-      const y = Math.floor(pixelIndex / canvas.width);
-
-      // ✅ ONLY NEAR LINE
-      if (Math.abs(x - lineX) > lineWidth) continue;
-
-      const diff =
-        Math.abs(curr[i] - prev[i]) +
-        Math.abs(curr[i+1] - prev[i+1]) +
-        Math.abs(curr[i+2] - prev[i+2]);
-
-      if (diff > 60) {
-        motionX += x;
-        motionY += y;
-        count++;
-      }
-    }
-
-    // ✅ VALID MOTION
-    if (count > 80) {
-      const avgX = motionX / count;
-      const avgY = motionY / count;
-
-      // draw motion point
-      ctx.fillStyle = "yellow";
-      ctx.beginPath();
-      ctx.arc(avgX, avgY, 6, 0, 2*Math.PI);
-      ctx.fill();
-
-      // ✅ TRIGGER
-      if (avgY > maxHeight) {
-        lastResult = "FAULT";
-        speak("Fault");
-      } else {
-        lastResult = "GOOD";
-      }
-
-      lastTime = Date.now();
-    }
-  }
-
-  previousFrame = currentFrame;
-
-  // ✅ FLASH RESULT
-  if (Date.now() - lastTime < SHOW_TIME) {
-    if (lastResult === "GOOD") {
-      document.body.style.background = "lime";
-      message.innerText = "GOOD";
-    } else if (lastResult === "FAULT") {
-      document.body.style.background = "red";
-      message.innerText = "FAULT";
-    }
-  } else {
-    document.body.style.background = "black";
-    message.innerText = "";
-  }
-
-  animationId = requestAnimationFrame(loop);
-}
-</script>
-
-</body>
-</html>
+    let
