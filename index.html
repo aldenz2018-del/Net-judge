@@ -8,7 +8,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: red;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -149,15 +149,20 @@ stopBtn.onclick = () => {
   cancelAnimationFrame(animationId);
   previousFrame = null;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // ✅ 1. draw camera FIRST
+ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ GREEN reference line (GOOD / FAULT line)
+// ✅ 2. draw green line AFTER (so it's visible on top)
 ctx.strokeStyle = "lime";
 ctx.lineWidth = 3;
 ctx.beginPath();
 ctx.moveTo(0, maxHeight);
 ctx.lineTo(canvas.width, maxHeight);
 ctx.stroke();
+
+// ✅ (optional) draw vertical zone after that too
+ctx.fillStyle = "rgba(0,255,255,0.15)";
+ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
   
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
