@@ -1,11 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- ✅ APP ICON -->
-  <link rel="apple-touch-icon" href="icon.png">
+  <title>BasementBall</title>
 
   <style>
     body {
@@ -18,14 +15,14 @@
 
     #message {
       margin-top: 20px;
-      font-size: 28px;
+      font-size: 32px;
       font-weight: bold;
     }
 
     button {
-      margin-top: 10px;
-      font-size: 22px;
-      padding: 12px 20px;
+      margin-top: 15px;
+      font-size: 24px;
+      padding: 15px 25px;
     }
 
     #stopBtn {
@@ -38,7 +35,7 @@
       width: 100%;
     }
 
-    /* ✅ hide real video */
+    /* hide raw video input */
     video {
       position: absolute;
       width: 1px;
@@ -50,7 +47,7 @@
 
 <body>
 
-<div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
+<div id="message">Tap START</div>
 
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
@@ -70,75 +67,39 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// ✅ SETTINGS
-const lineWidth = 50;
-let lineX;
-let maxHeight;
-
 let previousFrame = null;
-let lastMotionY = null;
+let ropeY;
+let lastFaultTime = 0;
 
-let lastResult = null;
-let lastTime = 0;
-const GOOD_TIME = 2000;
-const FAULT_TIME = 5000;
-
-// ✅ SPEECH CONTROL
-let canSpeak = true;
-
+// ✅ voice
 function speakFault() {
-  if (!canSpeak) return;
-
-  const speech = new SpeechSynthesisUtterance("Fault");
+  const s = new SpeechSynthesisUtterance("Fault");
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(speech);
-
-  canSpeak = false;
-  setTimeout(() => canSpeak = true, 1500);
+  window.speechSynthesis.speak(s);
 }
 
-// ✅ START (RELIABLE)
+// ✅ START (stable)
 startBtn.onclick = async () => {
   try {
     startBtn.disabled = true;
     message.innerText = "Starting camera...";
 
-    // ✅ STEP 1 — always works
-    let stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true
+    });
 
-    // ✅ STEP 2 — try to switch to BACK camera AFTER
-    const devices = await navigator.mediaDevices.enumerateDevices();
-
-    const backCam = devices.find(d =>
-      d.kind === "videoinput" &&
-      d.label.toLowerCase().includes("back")
-    );
-
-    if (backCam) {
-      stream.getTracks().forEach(t => t.stop()); // stop front cam
-
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: backCam.deviceId }
-      });
-    }
-
-    // ✅ attach FINAL stream
     streamRef = stream;
     video.srcObject = stream;
 
     await video.play();
-
     await new Promise(r => video.onloadeddata = r);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    lineX = canvas.width / 2;
-    maxHeight = canvas.height * 0.6;
+    ropeY = canvas.height * 0.5; // adjust if needed
 
     previousFrame = null;
-    lastMotionY = null;
-
     running = true;
 
     startBtn.style.display = "none";
@@ -148,11 +109,11 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera failed ❌";
+    message.innerText = "Camera blocked ❌";
     startBtn.disabled = false;
-    console.error(err);
   }
 };
+
 // ✅ STOP
 stopBtn.onclick = () => {
   running = false;
@@ -167,7 +128,6 @@ stopBtn.onclick = () => {
 
   cancelAnimationFrame(animationId);
   previousFrame = null;
-  lastMotionY = null;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -183,19 +143,14 @@ stopBtn.onclick = () => {
 function loop() {
   if (!running) return;
 
-  // ✅ draw camera
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ cyan detection zone
-  ctx.fillStyle = "rgba(0,255,255,0.15)";
-  ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
-
-  // ✅ green net line
+  // ✅ rope reference
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(0, maxHeight);
-  ctx.lineTo(canvas.width, maxHeight);
+  ctx.moveTo(0, ropeY);
+  ctx.lineTo(canvas.width, ropeY);
   ctx.stroke();
 
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -204,14 +159,14 @@ function loop() {
     const curr = frame.data;
     const prev = previousFrame.data;
 
-    let motionY = 0;
-    let count = 0;
+    let motionBelow = 0;
 
     for (let i = 0; i < curr.length; i += 16) {
       const pixelIndex = i / 4;
-      const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
 
-      if (Math.abs(x - lineX) > lineWidth) continue;
+      // ✅ ONLY check below rope
+      if (y < ropeY) continue;
 
       const diff =
         Math.abs(curr[i] - prev[i]) +
@@ -219,52 +174,25 @@ function loop() {
         Math.abs(curr[i+2] - prev[i+2]);
 
       if (diff > 60) {
-        const y = Math.floor(pixelIndex / canvas.width);
-        motionY += y;
-        count++;
+        motionBelow++;
       }
     }
 
-    if (count > 80) {
-      const avgY = motionY / count;
+    // ✅ FAULT detection
+    if (motionBelow > 120) {
 
-      if (lastMotionY !== null) {
+      if (Date.now() - lastFaultTime > 1500) {
 
-        // ✅ DOWN → FAULT
-        if (lastMotionY < maxHeight && avgY >= maxHeight) {
-          if (lastResult !== "FAULT") speakFault();
-          lastResult = "FAULT";
-          lastTime = Date.now();
-        }
+        document.body.style.background = "red";
+        message.innerText = "FAULT";
+        speakFault();
 
-        // ✅ UP → GOOD
-        if (lastMotionY >= maxHeight && avgY < maxHeight) {
-          lastResult = "GOOD";
-          lastTime = Date.now();
-        }
+        lastFaultTime = Date.now();
       }
-
-      lastMotionY = avgY;
     }
   }
 
   previousFrame = frame;
-
-  let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
-
-  if (Date.now() - lastTime < duration) {
-    if (lastResult === "FAULT") {
-      document.body.style.background = "red";
-      message.innerText = "FAULT";
-    } else if (lastResult === "GOOD") {
-      document.body.style.background = "lime";
-      message.innerText = "GOOD";
-    }
-  } else {
-    document.body.style.background = "pink";
-    message.innerText = "";
-  }
-
   animationId = requestAnimationFrame(loop);
 }
 </script>
