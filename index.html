@@ -5,31 +5,27 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ FIXED scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-
   <style>
     body {
       margin: 0;
       background: black;
-      overflow: hidden;
+      color: white;
       font-family: Arial;
+      overflow: hidden;
     }
 
     #message {
       position: absolute;
-      top: 30px;
+      top: 40px;
       width: 100%;
       text-align: center;
-      font-size: 30px;
-      color: white;
+      font-size: 28px;
       z-index: 5;
     }
 
     #startBtn {
       position: absolute;
-      top: 110px;
+      top: 120px;
       left: 50%;
       transform: translateX(-50%);
       font-size: 22px;
@@ -59,9 +55,6 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-const ropeY = 250;
-
-// ✅ START BUTTON
 startBtn.onclick = async () => {
   startBtn.style.display = "none";
   message.innerText = "Allow camera";
@@ -79,46 +72,17 @@ startBtn.onclick = async () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    message.innerText = "Loading AI...";
-
-    const model = await cocoSsd.load();
-
-    message.innerText = "Ready 🎾";
+    message.innerText = "Camera Ready ✅";
 
     function loop() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // ✅ green line to line up net
-      ctx.strokeStyle = "lime";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(0, ropeY);
-      ctx.lineTo(canvas.width, ropeY);
-      ctx.stroke();
-
-      model.detect(video).then(predictions => {
-
-        // ✅ ONLY show circle — no result logic yet
-        predictions.forEach(pred => {
-          if (pred.class === "sports ball" && pred.score > 0.3) {
-            const cx = pred.bbox[0] + pred.bbox[2] / 2;
-            const cy = pred.bbox[1] + pred.bbox[3] / 2;
-
-            ctx.fillStyle = "yellow";
-            ctx.beginPath();
-            ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
-            ctx.fill();
-          }
-        });
-
-        requestAnimationFrame(loop);
-      });
+      requestAnimationFrame(loop);
     }
 
     loop();
 
   } catch (err) {
-    message.innerText = "Camera failed ❌";
+    message.innerText = "Camera blocked ❌";
     console.error(err);
   }
 };
@@ -126,3 +90,4 @@ startBtn.onclick = async () => {
 
 </body>
 </html>
+``
