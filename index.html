@@ -8,28 +8,20 @@
 <style>
 body {
   margin: 0;
-  background: black;
-  color: black;
-  font-family: Arial;
+  background: pink;
   text-align: center;
+  font-family: Arial;
 }
 
 #message {
   margin-top: 20px;
   font-size: 32px;
-  font-weight: bold;
 }
 
 button {
-  margin-top: 15px;
+  margin-top: 20px;
   font-size: 24px;
   padding: 15px 25px;
-}
-
-#stopBtn {
-  background: red;
-  color: white;
-  display: none;
 }
 
 canvas {
@@ -49,146 +41,141 @@ video {
 <body>
 
 <div id="message">Tap START</div>
-
 <button id="startBtn">START</button>
-<button id="stopBtn">STOP</button>
 
 <video id="video" playsinline muted></video>
 <canvas id="canvas"></canvas>
 
 <script>
-let running = false;
-let streamRef = null;
-let animationId;
-
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
+const message = document.getElementById("message");
 
 let previousFrame = null;
 let ropeY = 0;
-
-let lastTriggerTime = 0;
-const COOLDOWN = 2000;
-
 let lastMotionY = null;
+let lastTrigger = 0;
 
-function speakFault() {
-  const s = new SpeechSynthesisUtterance("Fault");
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(s);
-}
-
-// ✅ GUARANTEED WORKING START
+// ✅ VERY SIMPLE START (this will work)
 startBtn.onclick = function () {
 
-  startBtn.disabled = true;
-  message.innerText = "Tap Allow";
+  message.innerText = "Requesting camera...";
 
-  navigator.mediaDevices.getUserMedia({
-    video: true   // ✅ IMPORTANT: DON'T FORCE BACK CAMERA YET
-  })
-  .then(function(stream) {
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => {
 
-    // ✅ Try switching to back camera AFTER successful start
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      const backCam = devices.find(d =>
-        d.kind === "videoinput" &&
-        d.label.toLowerCase().includes("back")
-      );
+      video.srcObject = stream;
 
-      if (backCam) {
-        stream.getTracks().forEach(t => t.stop());
+      return video.play();
+    })
+    .then(() => {
 
-        navigator.mediaDevices.getUserMedia({
-          video: { deviceId: backCam.deviceId }
-        }).then(s2 => {
-          streamRef = s2;
-          video.srcObject = s2;
-          video.play();
-        });
-      } else {
-        streamRef = stream;
-        video.srcObject = stream;
-        video.play();
-      }
+      // ✅ small delay (KEY)
+      setTimeout(() => {
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        ropeY = canvas.height * 0.5;
+
+        canvas.style.display = "block";
+        startBtn.style.display = "none";
+        message.innerText = "";
+
+        loop();
+
+      }, 300);
+    })
+    .catch(() => {
+      message.innerText = "Camera blocked ❌";
     });
-
-    message.innerText = "Starting...";
-
-    video.srcObject = stream;
-    return video.play();
-  })
-  .then(function() {
-
-    setTimeout(function() {
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      ropeY = canvas.height * 0.5;
-
-      previousFrame = null;
-      lastMotionY = null;
-
-      running = true;
-
-      canvas.style.display = "block";
-
-      startBtn.style.display = "none";
-      stopBtn.style.display = "inline-block";
-      message.innerText = "";
-
-      loop();
-
-    }, 200);
-
-  })
-  .catch(function(err) {
-    message.innerText = "Camera blocked ❌";
-    startBtn.disabled = false;
-    console.log(err);
-  });
 };
 
-// ✅ STOP
-stopBtn.onclick = function() {
-
-  running = false;
-
-  if (streamRef) {
-    streamRef.getTracks().forEach(t => t.stop());
-    streamRef = null;
-  }
-
-  video.pause();
-  video.srcObject = null;
-
-  cancelAnimationFrame(animationId);
-  previousFrame = null;
-  lastMotionY = null;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  canvas.style.display = "none";
-
-  startBtn.style.display = "inline-block";
-  startBtn.disabled = false;
-  stopBtn.style.display = "none";
-
-  message.innerText = "Stopped";
-  document.body.style.background = "pink";
-};
-
-// ✅ LOOP (with filters intact)
+// ✅ DETECTION LOOP
 function loop() {
-  if (!running) return;
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+  // draw rope
   ctx.strokeStyle = "lime";
-  ctx.line
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, ropeY);
+  ctx.lineTo(canvas.width, ropeY);
+  ctx.stroke();
+
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  if (previousFrame) {
+
+    let motionY = 0;
+    let count = 0;
+
+    const curr = frame.data;
+    const prev = previousFrame.data;
+
+    const centerX = canvas.width / 2;
+
+    for (let i = 0; i < curr.length; i += 16) {
+
+      const pixelIndex = i / 4;
+      const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
+
+      // ✅ center only
+      if (Math.abs(x - centerX) > 80) continue;
+
+      // ✅ under rope only
+      if (y < ropeY) continue;
+
+      const diff =
+        Math.abs(curr[i] - prev[i]) +
+        Math.abs(curr[i+1] - prev[i+1]) +
+        Math.abs(curr[i+2] - prev[i+2]);
+
+      if (diff > 60) {
+        motionY += y;
+        count++;
+      }
+    }
+
+    if (count > 100) {
+
+      const avgY = motionY / count;
+
+      if (lastMotionY !== null) {
+
+        const speed = Math.abs(avgY - lastMotionY);
+
+        // ✅ FAST ONLY (no running/shake)
+        if (speed > 20 && Date.now() - lastTrigger > 2000) {
+
+          document.body.style.background = "red";
+          message.innerText = "FAULT";
+
+          const s = new SpeechSynthesisUtterance("Fault");
+          speechSynthesis.speak(s);
+
+          lastTrigger = Date.now();
+
+          setTimeout(() => {
+            document.body.style.background = "pink";
+            message.innerText = "";
+          }, 1500);
+        }
+      }
+
+      lastMotionY = avgY;
+    }
+  }
+
+  previousFrame = frame;
+  requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
