@@ -40,7 +40,7 @@ video {
 
 <body>
 
-<div id="message">Happy 11th Birthday Mattie!</div>
+<div id="message">Tap START</div>
 <button id="startBtn">START</button>
 
 <video id="video" playsinline muted></video>
@@ -56,7 +56,8 @@ const message = document.getElementById("message");
 
 let previousFrame = null;
 let ropeY = 0;
-let lastMotionY = null;
+
+let lastY = null;
 let lastTrigger = 0;
 
 // 🔊 sound
@@ -66,13 +67,13 @@ function speakFault() {
   speechSynthesis.speak(s);
 }
 
-// ✅ START (stable)
+// ✅ STABLE START
 startBtn.onclick = function () {
 
   message.innerText = "Requesting camera...";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" } // ✅ back camera
+    video: true
   })
   .then(stream => {
 
@@ -81,7 +82,25 @@ startBtn.onclick = function () {
   })
   .then(() => {
 
-    // ✅ delay fixes blank screen + iPhone timing
+    // ✅ after camera works, try to switch to back camera
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const backCam = devices.find(d =>
+        d.kind === "videoinput" &&
+        d.label.toLowerCase().includes("back")
+      );
+
+      if (backCam) {
+        video.srcObject.getTracks().forEach(t => t.stop());
+
+        navigator.mediaDevices.getUserMedia({
+          video: { deviceId: backCam.deviceId }
+        }).then(s2 => {
+          video.srcObject = s2;
+          video.play();
+        });
+      }
+    });
+
     setTimeout(() => {
 
       canvas.width = video.videoWidth || 640;
@@ -93,22 +112,24 @@ startBtn.onclick = function () {
       startBtn.style.display = "none";
       message.innerText = "";
 
+      previousFrame = null;
+      lastY = null;
+
       loop();
 
-    }, 500);
+    }, 400);
   })
   .catch(() => {
     message.innerText = "Camera blocked ❌";
   });
 };
 
-
-// ✅ LOOP
+// ✅ MAIN LOOP
 function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // rope line
+  // draw rope
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -120,9 +141,9 @@ function loop() {
 
   if (previousFrame) {
 
-    let motionBelow = 0;
-    let totalMotion = 0;
     let motionY = 0;
+    let count = 0;
+    let totalMotion = 0;
 
     const curr = frame.data;
     const prev = previousFrame.data;
@@ -140,28 +161,34 @@ function loop() {
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
-      if (diff > 80) { // ✅ higher threshold
+      if (diff > 80) {
 
         totalMotion++;
 
-        // ✅ only center zone
+        // ✅ focus on center + BELOW rope
         if (Math.abs(x - centerX) < 80 && y >= ropeY) {
-          motionBelow++;
           motionY += y;
+          count++;
         }
       }
     }
 
-    // ✅ FILTER: ignore full-frame shake
-    if (motionBelow > 200 && totalMotion < 2000) {
+    // ✅ ignore camera shake
+    if (count > 100 && totalMotion < 2000) {
 
-      const avgY = motionY / motionBelow;
+      const avgY = motionY / count;
 
-      if (lastMotionY !== null) {
-        const speed = Math.abs(avgY - lastMotionY);
+      if (lastY !== null) {
 
-        // ✅ trigger only FAST motion
-        if (speed > 20 && Date.now() - lastTrigger > 2000) {
+        const speed = Math.abs(avgY - lastY);
+
+        // ✅ CROSSING detection
+        if (
+          lastY < ropeY &&      // was ABOVE
+          avgY >= ropeY &&      // now BELOW
+          speed > 20 &&         // fast (ball-like)
+          Date.now() - lastTrigger > 2000
+        ) {
 
           document.body.style.background = "red";
           message.innerText = "FAULT";
@@ -173,18 +200,4 @@ function loop() {
           setTimeout(() => {
             document.body.style.background = "pink";
             message.innerText = "";
-          }, 1500);
-        }
-      }
-
-      lastMotionY = avgY;
-    }
-  }
-
-  previousFrame = frame;
-  requestAnimationFrame(loop);
-}
-</script>
-
-</body>
-</html>
+          }, 
