@@ -54,75 +54,75 @@ const btn = document.getElementById("startBtn");
 const msg = document.getElementById("message");
 
 let prevFrame = null;
-let ropeY = 0;
-
-let lastY = null;
+let lastX = null;
 let lastTrigger = 0;
 
+// 🔊 sound
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ SIMPLE START (THIS IS WHY IT WORKS)
+// ✅ START (safe + rear camera)
 btn.onclick = function () {
 
   msg.innerText = "Allow camera";
 
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-      video.srcObject = stream;
-      return video.play();
-    })
-    .then(() => {
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" } // ✅ rear camera
+  })
+  .then(stream => {
+    video.srcObject = stream;
+    return video.play();
+  })
+  .then(() => {
 
-      setTimeout(() => {
+    setTimeout(() => {
 
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
 
-        ropeY = canvas.height * 0.5;
+      canvas.style.display = "block";
+      btn.style.display = "none";
+      msg.innerText = "";
 
-        canvas.style.display = "block";
-        btn.style.display = "none";
-        msg.innerText = "";
+      loop();
 
-        loop();
+    }, 400);
 
-      }, 400);
-    })
-    .catch(() => {
-      msg.innerText = "Camera blocked ❌";
-    });
+  })
+  .catch(() => {
+    msg.innerText = "Camera blocked ❌";
+  });
 };
 
 
-// ✅ DETECTION LOOP
+// ✅ MAIN LOOP
 function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // rope line
+  // ✅ vertical center line
+  const midX = canvas.width / 2;
+
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(0, ropeY);
-  ctx.lineTo(canvas.width, ropeY);
+  ctx.moveTo(midX, 0);
+  ctx.lineTo(midX, canvas.height);
   ctx.stroke();
 
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (prevFrame) {
 
-    let sumY = 0;
+    let sumX = 0;
     let count = 0;
     let totalMotion = 0;
 
     const curr = frame.data;
     const prev = prevFrame.data;
-
-    const center = canvas.width / 2;
 
     for (let i = 0; i < curr.length; i += 16) {
 
@@ -135,55 +135,69 @@ function loop() {
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
+      // ignore weak motion
       if (diff > 90) {
 
         totalMotion++;
 
-        // only center strip + below rope
-        if (Math.abs(x - center) < 80 && y >= ropeY) {
-          sumY += y;
+        // ✅ ONLY small center region
+        if (Math.abs(x - midX) < 60) {
+          sumX += x;
           count++;
         }
       }
     }
 
-    // ✅ ignore camera shake
-    if (count > 120 && totalMotion < 1500) {
+    // ✅ ignore shake (too much global motion)
+    if (count > 80 && totalMotion < 1500) {
 
-      const avgY = sumY / count;
+      const avgX = sumX / count;
 
-      if (lastY !== null) {
+      if (lastX !== null) {
 
-        const speed = Math.abs(avgY - lastY);
+        const speed = Math.abs(avgX - lastX);
 
-        // ✅ CROSSING LOGIC
+        // ✅ CROSSING DETECTION
         if (
-          lastY < ropeY &&     // was above
-          avgY >= ropeY &&     // now below
-          speed > 25 &&        // fast = ball
+          lastX < midX &&   // was left
+          avgX >= midX &&   // now right
+          speed > 25 &&     // fast = ball
           Date.now() - lastTrigger > 2000
         ) {
+          trigger();
+        }
 
-          document.body.style.background = "red";
-          msg.innerText = "FAULT";
-
-          speak();
-
-          lastTrigger = Date.now();
-
-          setTimeout(() => {
-            document.body.style.background = "pink";
-            msg.innerText = "";
-          }, 1500);
+        if (
+          lastX >= midX &&
+          avgX < midX &&
+          speed > 25 &&
+          Date.now() - lastTrigger > 2000
+        ) {
+          trigger();
         }
       }
 
-      lastY = avgY;
+      lastX = avgX;
     }
   }
 
   prevFrame = frame;
   requestAnimationFrame(loop);
+}
+
+// ✅ trigger result
+function trigger() {
+  document.body.style.background = "red";
+  msg.innerText = "FAULT";
+
+  speak();
+
+  lastTrigger = Date.now();
+
+  setTimeout(() => {
+    document.body.style.background = "pink";
+    msg.innerText = "";
+  }, 1500);
 }
 </script>
 
