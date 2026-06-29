@@ -53,42 +53,43 @@
 <canvas id="canvas"></canvas>
 
 <script>
+<script>
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-// 🔧 adjust this
+// 🔧 adjust for your rope
 const ropeY = 250;
 
-let lastResult = null;
-let lastTime = 0;
-const DISPLAY_TIME = 7000;
-
-// ✅ TRACKING STATE
-let history = [];
+let started = false;
 
 startBtn.onclick = async () => {
+  if (started) return;
+  started = true;
+
   startBtn.style.display = "none";
-  message.innerText = "Starting...";
+  message.innerText = "Tap Allow for Camera";
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
-  });
+  try {
+    // ✅ BASIC camera request (most reliable)
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
-  video.srcObject = stream;
-  await video.play();
+    message.innerText = "Camera starting...";
 
-  await new Promise(r => video.onloadedmetadata = r);
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+    await video.play();
 
-  message.innerText = "Loading AI...";
-  const model = await cocoSsd.load();
+    message.innerText = "Camera ready ✅";
 
-  message.innerText = "";
+  } catch (err) {
+    message.innerText = "Camera blocked ❌";
+    console.error(err);
+  }
+};
+</script>
+
 
   function loop() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
