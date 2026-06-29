@@ -4,15 +4,10 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ CORRECT SCRIPT TAGS -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-``
-
   <style>
     body {
       margin: 0;
-      background: purple;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -45,14 +40,13 @@
 
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
 
-<button id="startBtn" onclick="start()">START</button>
-<button id="stopBtn" onclick="stop()">STOP</button>
+<button id="startBtn">START</button>
+<button id="stopBtn">STOP</button>
 
 <video id="video" playsinline style="display:none;"></video>
 <canvas id="canvas"></canvas>
 
 <script>
-let model;
 let running = false;
 let streamRef;
 let animationId;
@@ -64,15 +58,19 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// ✅ DETECTION SETTINGS
+// ✅ SETTINGS
 let lineX;
 let maxHeight;
+const lineWidth = 50; // ✅ requested width
 
-// ✅ TRACKING
-let history = [];
+let previousFrame = null;
+
 let lastResult = null;
 let lastTime = 0;
 const SHOW_TIME = 6000;
+
+startBtn.onclick = start;
+stopBtn.onclick = stop;
 
 async function start() {
   startBtn.disabled = false;
@@ -92,13 +90,8 @@ async function start() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // ✅ set line positions
     lineX = canvas.width / 2;
     maxHeight = canvas.height * 0.6;
-
-    message.innerText = "Loading AI...";
-
-    model = await cocoSsd.load();
 
     running = true;
 
@@ -124,6 +117,8 @@ function stop() {
 
   cancelAnimationFrame(animationId);
 
+  previousFrame = null;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   message.innerText = "Stopped";
@@ -131,6 +126,8 @@ function stop() {
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
   stopBtn.style.display = "none";
+
+  document.body.style.background = "black";
 }
 
 function loop() {
@@ -138,7 +135,11 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ VERTICAL LINE
+  // ✅ DRAW DETECTION ZONE (cyan)
+  ctx.fillStyle = "rgba(0,255,255,0.15)";
+  ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
+
+  // ✅ DRAW CENTER LINE
   ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -146,75 +147,84 @@ function loop() {
   ctx.lineTo(lineX, canvas.height);
   ctx.stroke();
 
-  // ✅ HEIGHT LINE
+  // ✅ DRAW HEIGHT LINE (red)
   ctx.strokeStyle = "red";
   ctx.beginPath();
   ctx.moveTo(0, maxHeight);
   ctx.lineTo(canvas.width, maxHeight);
   ctx.stroke();
 
-  model.detect(video).then(predictions => {
+  const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    predictions.forEach(pred => {
-      if (pred.class === "sports ball" && pred.score > 0.2) {
+  if (previousFrame) {
+    const curr = currentFrame.data;
+    const prev = previousFrame.data;
 
-        const x = pred.bbox[0];
-        const y = pred.bbox[1];
-        const w = pred.bbox[2];
-        const h = pred.bbox[3];
+    let motionX = 0;
+    let motionY = 0;
+    let count = 0;
 
-        const cx = x + w / 2;
-        const cy = y + h / 2;
+    // ✅ ONLY CHECK LINE ZONE
+    for (let i = 0; i < curr.length; i += 16) {
 
-        // store movement history
-        history.push({x: cx, y: cy});
-        if (history.length > 5) history.shift();
+      const pixelIndex = i / 4;
+      const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
 
-        // draw ball
-        ctx.fillStyle = "yellow";
-        ctx.beginPath();
-        ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-    });
+      // ✅ ONLY NEAR LINE
+      if (Math.abs(x - lineX) > lineWidth) continue;
 
-    // ✅ CROSSING + HEIGHT LOGIC
-    if (history.length >= 2) {
-      const prev = history[history.length - 2];
-      const curr = history[history.length - 1];
+      const diff =
+        Math.abs(curr[i] - prev[i]) +
+        Math.abs(curr[i+1] - prev[i+1]) +
+        Math.abs(curr[i+2] - prev[i+2]);
 
-      const dx = curr.x - prev.x;
-      const predictedX = curr.x + dx;
-
-      // crossing left → right
-      if (curr.x < lineX && predictedX >= lineX) {
-
-        if (curr.y > maxHeight) {
-          lastResult = "FAULT";
-        } else {
-          lastResult = "GOOD";
-        }
-
-        lastTime = Date.now();
+      if (diff > 60) {
+        motionX += x;
+        motionY += y;
+        count++;
       }
     }
 
-    // ✅ RESULT DISPLAY
-    if (Date.now() - lastTime < SHOW_TIME) {
-      if (lastResult === "GOOD") {
-        document.body.style.background = "lime";
-        message.innerText = "GOOD";
-      } else if (lastResult === "FAULT") {
-        document.body.style.background = "red";
-        message.innerText = "FAULT";
-      }
-    } else {
-      document.body.style.background = "black";
-      message.innerText = "";
-    }
+    // ✅ VALID MOTION
+    if (count > 80) {
+      const avgX = motionX / count;
+      const avgY = motionY / count;
 
-    animationId = requestAnimationFrame(loop);
-  });
+      // draw motion point
+      ctx.fillStyle = "yellow";
+      ctx.beginPath();
+      ctx.arc(avgX, avgY, 6, 0, 2*Math.PI);
+      ctx.fill();
+
+      // ✅ TRIGGER
+      if (avgY > maxHeight) {
+        lastResult = "FAULT";
+      } else {
+        lastResult = "GOOD";
+      }
+
+      lastTime = Date.now();
+    }
+  }
+
+  previousFrame = currentFrame;
+
+  // ✅ FLASH RESULT
+  if (Date.now() - lastTime < SHOW_TIME) {
+    if (lastResult === "GOOD") {
+      document.body.style.background = "lime";
+      message.innerText = "GOOD";
+    } else if (lastResult === "FAULT") {
+      document.body.style.background = "red";
+      message.innerText = "FAULT";
+    }
+  } else {
+    document.body.style.background = "black";
+    message.innerText = "";
+  }
+
+  animationId = requestAnimationFrame(loop);
 }
 </script>
 
