@@ -11,7 +11,7 @@
   <style>
     body {
       margin: 0;
-      background: orange;
+      background: yellow;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -47,6 +47,16 @@
 <script>
 let model;
 
+// rope position (adjust if needed)
+let ropeY;
+
+let lastResult = null;
+let lastTime = 0;
+const SHOW_TIME = 3000; // 3 seconds
+
+// ✅ TRACKING LAST BALL POSITION
+let lastY = null;
+
 async function start() {
   const message = document.getElementById("message");
   const video = document.getElementById("video");
@@ -55,64 +65,95 @@ async function start() {
 
   message.innerText = "Starting camera...";
 
-  try {
-    // ✅ FORCE BACK CAMERA
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
-    });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: "environment" } }
+  });
 
-    video.srcObject = stream;
-    await video.play();
+  video.srcObject = stream;
+  await video.play();
 
-    await new Promise(r => video.onloadedmetadata = r);
+  await new Promise(r => video.onloadedmetadata = r);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
-    message.innerText = "Loading AI...";
+  ropeY = canvas.height / 2;
 
-    model = await cocoSsd.load();
+  message.innerText = "Loading AI...";
 
-    message.innerText = "Ready 🎾";
+  model = await cocoSsd.load();
 
-    function loop() {
-      // draw video
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  message.innerText = "Ready 🎾";
 
-      // ✅ GREEN ALIGNMENT LINE
-      const ropeY = canvas.height / 2;
-      ctx.strokeStyle = "lime";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(0, ropeY);
-      ctx.lineTo(canvas.width, ropeY);
-      ctx.stroke();
+  function loop() {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      model.detect(video).then(predictions => {
-        predictions.forEach(pred => {
-          if (pred.class === "sports ball" && pred.score > 0.3) {
-            const [x, y, w, h] = pred.bbox;
-            const cx = x + w / 2;
-            const cy = y + h / 2;
+    // ✅ DRAW GREEN LINE
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, ropeY);
+    ctx.lineTo(canvas.width, ropeY);
+    ctx.stroke();
 
-            // ✅ draw ball marker
-            ctx.fillStyle = "yellow";
-            ctx.beginPath();
-            ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
-            ctx.fill();
+    model.detect(video).then(predictions => {
+
+      predictions.forEach(pred => {
+        if (pred.class === "sports ball" && pred.score > 0.3) {
+
+          const [x, y, w, h] = pred.bbox;
+          const cx = x + w/2;
+          const cy = y + h/2;
+
+          // ✅ DRAW BALL DOT
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(cx, cy, 8, 0, 2*Math.PI);
+          ctx.fill();
+
+          // ✅ CROSSING DETECTION (VERY IMPORTANT)
+          if (lastY !== null) {
+
+            // crossed DOWN → FAULT
+            if (lastY < ropeY && cy >= ropeY) {
+              lastResult = "FAULT";
+              lastTime = Date.now();
+            }
+
+            // crossed UP → GOOD
+            if (lastY >= ropeY && cy < ropeY) {
+              lastResult = "GOOD";
+              lastTime = Date.now();
+            }
           }
-        });
 
-        requestAnimationFrame(loop);
+          lastY = cy;
+        }
       });
-    }
 
-    loop();
+      // ✅ SCREEN FLASH
+      if (Date.now() - lastTime < SHOW_TIME) {
 
-  } catch (err) {
-    message.innerText = "Camera failed ❌";
-    console.error(err);
+        if (lastResult === "GOOD") {
+          document.body.style.background = "lime";
+          message.innerText = "GOOD";
+        }
+
+        if (lastResult === "FAULT") {
+          document.body.style.background = "red";
+          message.innerText = "FAULT";
+        }
+
+      } else {
+        document.body.style.background = "black";
+        message.innerText = "";
+      }
+
+      requestAnimationFrame(loop);
+    });
   }
+
+  loop();
 }
 </script>
 
