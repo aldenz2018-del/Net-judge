@@ -4,10 +4,13 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- ✅ APP ICON -->
+  <link rel="apple-touch-icon" href="icon.png">
+
   <style>
     body {
       margin: 0;
-      background: pink; /* ✅ default background */
+      background: pink;
       color: black;
       font-family: Arial;
       text-align: center;
@@ -16,6 +19,7 @@
     #message {
       margin-top: 20px;
       font-size: 28px;
+      font-weight: bold;
     }
 
     button {
@@ -34,6 +38,7 @@
       width: 100%;
     }
 
+    /* ✅ hide real video */
     video {
       position: absolute;
       width: 1px;
@@ -78,8 +83,9 @@ let lastTime = 0;
 const GOOD_TIME = 2000;
 const FAULT_TIME = 5000;
 
-// ✅ speech control
+// ✅ SPEECH CONTROL
 let canSpeak = true;
+
 function speakFault() {
   if (!canSpeak) return;
 
@@ -91,7 +97,7 @@ function speakFault() {
   setTimeout(() => canSpeak = true, 1500);
 }
 
-// ✅ START (stable)
+// ✅ START (RELIABLE)
 startBtn.onclick = async () => {
   try {
     startBtn.disabled = true;
@@ -161,14 +167,14 @@ stopBtn.onclick = () => {
 function loop() {
   if (!running) return;
 
-  // ✅ draw video
+  // ✅ draw camera
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   // ✅ cyan detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ GREEN LINE (net)
+  // ✅ green net line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -208,4 +214,44 @@ function loop() {
 
       if (lastMotionY !== null) {
 
-        // ✅ crossing DOWN → FAULT
+        // ✅ DOWN → FAULT
+        if (lastMotionY < maxHeight && avgY >= maxHeight) {
+          if (lastResult !== "FAULT") speakFault();
+          lastResult = "FAULT";
+          lastTime = Date.now();
+        }
+
+        // ✅ UP → GOOD
+        if (lastMotionY >= maxHeight && avgY < maxHeight) {
+          lastResult = "GOOD";
+          lastTime = Date.now();
+        }
+      }
+
+      lastMotionY = avgY;
+    }
+  }
+
+  previousFrame = frame;
+
+  let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
+
+  if (Date.now() - lastTime < duration) {
+    if (lastResult === "FAULT") {
+      document.body.style.background = "red";
+      message.innerText = "FAULT";
+    } else if (lastResult === "GOOD") {
+      document.body.style.background = "lime";
+      message.innerText = "GOOD";
+    }
+  } else {
+    document.body.style.background = "pink";
+    message.innerText = "";
+  }
+
+  animationId = requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
