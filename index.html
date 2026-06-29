@@ -5,7 +5,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ Correct AI scripts -->
+  <!-- ✅ REAL SCRIPT TAGS -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
@@ -24,7 +24,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 50px;
+      font-size: 40px;
       color: white;
       text-align: center;
       z-index: 5;
@@ -36,7 +36,7 @@
       left: 50%;
       transform: translateX(-50%);
       font-size: 20px;
-      padding: 10px 20px;
+      padding: 10px;
       z-index: 10;
     }
 
@@ -62,7 +62,7 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-// 🔧 Adjust based on your net height
+// adjust for your net
 const netTop = 180;
 const netBottom = 300;
 
@@ -70,20 +70,19 @@ let lastResult = null;
 let lastTime = 0;
 const DISPLAY_TIME = 7000;
 
-startBtn.onclick = async () => {
-  try {
-    startBtn.style.display = "none";
-    message.innerText = "Starting...";
+startBtn.onclick = start;
 
-    // ✅ Start camera
+async function start() {
+  startBtn.style.display = "none";
+  message.innerText = "Requesting camera...";
+
+  try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
+      video: true
     });
 
     video.srcObject = stream;
     await video.play();
-
-    await new Promise(resolve => video.onloadedmetadata = resolve);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -98,11 +97,9 @@ startBtn.onclick = async () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       model.detect(video).then(predictions => {
-
         predictions.forEach(pred => {
           if (pred.class === "sports ball" && pred.score > 0.2) {
-            const [x, y, w, h] = pred.bbox;
-            const centerY = y + h / 2;
+            const centerY = pred.bbox[1] + pred.bbox[3] / 2;
 
             if (centerY > netBottom) {
               lastResult = "FAULT";
@@ -114,7 +111,7 @@ startBtn.onclick = async () => {
           }
         });
 
-        // ✅ Full screen flash result
+        // full screen flash
         if (Date.now() - lastTime < DISPLAY_TIME) {
           if (lastResult === "GOOD") {
             document.body.style.background = "lime";
@@ -135,10 +132,10 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "ERROR: " + err.message;
+    message.innerText = "Camera Error!";
     console.error(err);
   }
-};
+}
 </script>
 
 </body>
