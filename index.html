@@ -3,17 +3,14 @@
 <head>
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="apple-touch-icon" href="icon.png">
 
   <style>
     body {
       margin: 0;
-      background: yellow;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
-      video {
-  display: none;
     }
 
     #message {
@@ -35,6 +32,15 @@
     canvas {
       width: 100%;
     }
+
+    /* ✅ critical: hide real video so only canvas shows */
+    video {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 
@@ -45,7 +51,7 @@
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
 
-<video id="video" playsinline></video>
+<video id="video" playsinline muted></video>
 <canvas id="canvas"></canvas>
 
 <script>
@@ -61,18 +67,20 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
 // ✅ SETTINGS
+const lineWidth = 50;
 let lineX;
 let maxHeight;
-const lineWidth = 50;
 
+// motion
 let previousFrame = null;
 
+// result timing
 let lastResult = null;
 let lastTime = 0;
 const GOOD_TIME = 2000;
 const FAULT_TIME = 5000;
 
-// ✅ prevent speech spam
+// voice (no spam)
 let canSpeak = true;
 function speakFault() {
   if (!canSpeak) return;
@@ -93,9 +101,8 @@ startBtn.onclick = async () => {
 
     video.srcObject = null;
 
+    // ✅ force back camera
     let stream;
-
-    // ✅ FORCE BACK CAMERA (safe version)
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { exact: "environment" } }
@@ -110,20 +117,21 @@ startBtn.onclick = async () => {
     video.srcObject = stream;
 
     await video.play();
+    await new Promise(r => video.onloadedmetadata = r);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // ✅ reference positions
     lineX = canvas.width / 2;
     maxHeight = canvas.height * 0.6;
 
+    previousFrame = null;
     running = true;
 
     startBtn.style.display = "none";
     stopBtn.style.display = "inline-block";
     message.innerText = "";
-
-    previousFrame = null;
 
     loop();
 
@@ -149,21 +157,8 @@ stopBtn.onclick = () => {
   cancelAnimationFrame(animationId);
   previousFrame = null;
 
-  // ✅ 1. draw camera FIRST
-ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// ✅ 2. draw green line AFTER (so it's visible on top)
-ctx.strokeStyle = "lime";
-ctx.lineWidth = 3;
-ctx.beginPath();
-ctx.moveTo(0, maxHeight);
-ctx.lineTo(canvas.width, maxHeight);
-ctx.stroke();
-
-// ✅ (optional) draw vertical zone after that too
-ctx.fillStyle = "rgba(0,255,255,0.15)";
-ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
-  
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
   stopBtn.style.display = "none";
@@ -172,16 +167,26 @@ ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
   document.body.style.background = "black";
 };
 
-// ✅ LOOP
+// ✅ MAIN LOOP
 function loop() {
   if (!running) return;
 
+  // ✅ 1. draw camera FIRST
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ detection zone
+  // ✅ 2. draw detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
+  // ✅ 3. draw GREEN reference line (ON TOP)
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, maxHeight);
+  ctx.lineTo(canvas.width, maxHeight);
+  ctx.stroke();
+
+  // ✅ get frame AFTER drawing video
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
@@ -195,6 +200,7 @@ function loop() {
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
 
+      // ✅ only detect on vertical line area
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
@@ -225,6 +231,7 @@ function loop() {
 
   previousFrame = frame;
 
+  // ✅ RESULT DISPLAY
   let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
 
   if (Date.now() - lastTime < duration) {
