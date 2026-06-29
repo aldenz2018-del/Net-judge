@@ -16,13 +16,12 @@ body {
   position: fixed;
   top: 20px;
   width: 100%;
-  text-align: center;
   color: white;
 }
 
 #msg {
-  font-size: 36px;
-  margin-bottom: 20px;
+  font-size: 32px;
+  margin-bottom: 15px;
 }
 
 button {
@@ -32,14 +31,10 @@ button {
 
 canvas {
   width: 100%;
-  display: none;
 }
 
 video {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  display: none;
 }
 </style>
 </head>
@@ -47,7 +42,7 @@ video {
 <body>
 
 <div id="ui">
-  <div id="msg">Tap START</div>
+  <div id="msg">Loading…</div>
   <button id="startBtn">START</button>
 </div>
 
@@ -62,39 +57,38 @@ const ctx = canvas.getContext("2d");
 const btn = document.getElementById("startBtn");
 const msg = document.getElementById("msg");
 
+// ✅ detect phone vs laptop
+const isPhone = /iPhone|Android/i.test(navigator.userAgent);
+
+// ✅ state
 let prevFrame = null;
 let ropeY = 0;
-
 let lastX = null;
 let lastTrigger = 0;
 
-// ✅ sound
+// ✅ phone mode only
+if (!isPhone) {
+  msg.innerText = "Viewing… (use phone to start)";
+  btn.style.display = "none";
+}
+
+// 🔊 sound
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ detect if this device should run camera
-function isPhone() {
-  return /iPhone|Android/i.test(navigator.userAgent);
-}
-
-// ✅ START BUTTON (THIS PART IS SAFE)
+// ✅ START BUTTON (ONLY ON PHONE)
 btn.onclick = function () {
-
-  // 💻 Laptop just shows screen
-  if (!isPhone()) {
-    msg.innerText = "Viewer Mode";
-    return;
-  }
 
   msg.innerText = "Allow camera";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" } // ✅ rear cam
+    video: { facingMode: "environment" }
   })
   .then(stream => {
+
     video.srcObject = stream;
     return video.play();
   })
@@ -102,30 +96,33 @@ btn.onclick = function () {
 
     setTimeout(() => {
 
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      // ✅ IMPORTANT FIX (this was breaking your video)
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
       ropeY = canvas.height * 0.5;
 
-      canvas.style.display = "block";
-      btn.style.display = "none";
       msg.innerText = "";
+      btn.style.display = "none";
 
       loop();
 
-    }, 400);
+    }, 500);
 
   })
-  .catch(() => {
+  .catch(err => {
     msg.innerText = "Camera blocked ❌";
+    console.log(err);
   });
 };
 
 
-// ✅ MAIN LOOP
+// ✅ MAIN LOOP (DRAW VIDEO + OVERLAY)
 function loop() {
 
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (video.readyState >= 2) {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  }
 
   const midX = canvas.width / 2;
 
@@ -137,7 +134,7 @@ function loop() {
   ctx.lineTo(midX, canvas.height);
   ctx.stroke();
 
-  // ✅ rope height line
+  // ✅ rope line
   ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -172,7 +169,6 @@ function loop() {
 
         totalMotion++;
 
-        // ✅ center strip only
         if (Math.abs(x - midX) < 80) {
           sumX += x;
           sumY += y;
@@ -181,7 +177,6 @@ function loop() {
       }
     }
 
-    // ✅ ignore camera shake
     if (count > 60 && totalMotion < 1500) {
 
       const avgX = sumX / count;
@@ -191,12 +186,11 @@ function loop() {
 
         const speed = Math.abs(avgX - lastX);
 
-        // ✅ CROSSING + HEIGHT CHECK
         if (
           lastX < midX &&
           avgX >= midX &&
           speed > 20 &&
-          avgY >= ropeY &&   // BELOW rope
+          avgY >= ropeY &&
           Date.now() - lastTrigger > 2000
         ) {
           trigger();
