@@ -4,13 +4,10 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ APP ICON (PUT icon.png IN SAME FOLDER) -->
-  <link rel="apple-touch-icon" href="icon.png">
-
   <style>
     body {
       margin: 0;
-      background: blue;
+      background: pink;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -60,37 +57,44 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// detection settings
+// ✅ SETTINGS
 let lineX;
 let maxHeight;
 const lineWidth = 50;
 
 let previousFrame = null;
+
 let lastResult = null;
 let lastTime = 0;
 const GOOD_TIME = 2000;
-const FAULT_TIME = 4000;
+const FAULT_TIME = 5000;
 
-// speech control
+// ✅ SPEECH CONTROL (NO SPAM)
 let canSpeak = true;
 
 function speakFault() {
   if (!canSpeak) return;
 
-  window.speechSynthesis.speak(
-    new SpeechSynthesisUtterance("Fault")
-  );
+  const speech = new SpeechSynthesisUtterance("Fault");
+  window.speechSynthesis.cancel(); // stop overlaps
+  window.speechSynthesis.speak(speech);
 
   canSpeak = false;
-  setTimeout(() => canSpeak = true, 2000);
+  setTimeout(() => canSpeak = true, 1500);
 }
 
-// ✅ START (SIMPLE + RELIABLE)
+// ✅ START
 startBtn.onclick = async () => {
   try {
+    startBtn.disabled = true;
     message.innerText = "Starting camera...";
 
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    // ✅ reset video fully
+    video.srcObject = null;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true
+    });
 
     streamRef = stream;
     video.srcObject = stream;
@@ -109,19 +113,23 @@ startBtn.onclick = async () => {
     stopBtn.style.display = "inline-block";
     message.innerText = "";
 
+    previousFrame = null;
+
     loop();
 
   } catch (err) {
-    message.innerText = "Camera blocked ❌";
+    message.innerText = "Camera error ❌";
+    startBtn.disabled = false;
+    console.error(err);
   }
 };
 
-// ✅ STOP (FULL RESET)
+// ✅ STOP
 stopBtn.onclick = () => {
   running = false;
 
   if (streamRef) {
-    streamRef.getTracks().forEach(t => t.stop());
+    streamRef.getTracks().forEach(track => track.stop());
     streamRef = null;
   }
 
@@ -134,8 +142,11 @@ stopBtn.onclick = () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   startBtn.style.display = "inline-block";
+  startBtn.disabled = false;
   stopBtn.style.display = "none";
+
   message.innerText = "Stopped";
+  document.body.style.background = "black";
 };
 
 // ✅ MAIN LOOP
@@ -144,23 +155,25 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // detection zone
+  // ✅ draw detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
+  // ✅ get frame
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
-    let motionY = 0;
-    let count = 0;
-
     const curr = frame.data;
     const prev = previousFrame.data;
+
+    let motionY = 0;
+    let count = 0;
 
     for (let i = 0; i < curr.length; i += 16) {
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
 
+      // ✅ ONLY LINE AREA
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
@@ -175,11 +188,14 @@ function loop() {
       }
     }
 
+    // ✅ MOTION DETECTED
     if (count > 80) {
       const avgY = motionY / count;
 
       if (avgY > maxHeight) {
-        if (lastResult !== "FAULT") speakFault();
+        if (lastResult !== "FAULT") {
+          speakFault(); // 🔊 speak once
+        }
         lastResult = "FAULT";
       } else {
         lastResult = "GOOD";
@@ -191,13 +207,14 @@ function loop() {
 
   previousFrame = frame;
 
+  // ✅ DISPLAY
   let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
 
   if (Date.now() - lastTime < duration) {
     if (lastResult === "FAULT") {
       document.body.style.background = "red";
       message.innerText = "FAULT";
-    } else {
+    } else if (lastResult === "GOOD") {
       document.body.style.background = "lime";
       message.innerText = "GOOD";
     }
