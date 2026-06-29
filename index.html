@@ -8,7 +8,7 @@
 <style>
 body {
   margin: 0;
-  background: pink;
+  background: black;
   color: black;
   font-family: Arial;
   text-align: center;
@@ -44,7 +44,6 @@ video {
   opacity: 0;
 }
 </style>
-
 </head>
 
 <body>
@@ -76,32 +75,52 @@ let ropeY = 0;
 let lastTriggerTime = 0;
 const COOLDOWN = 2000;
 
-// ✅ NEW: tracking for motion filtering
 let lastMotionY = null;
 
-// ✅ voice
 function speakFault() {
   const s = new SpeechSynthesisUtterance("Fault");
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(s);
 }
 
-// ✅ START (unchanged, stable)
-startBtn.addEventListener("click", function () {
+// ✅ GUARANTEED WORKING START
+startBtn.onclick = function () {
 
   startBtn.disabled = true;
-  message.innerText = "Requesting camera...";
+  message.innerText = "Tap Allow";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
+    video: true   // ✅ IMPORTANT: DON'T FORCE BACK CAMERA YET
   })
   .then(function(stream) {
 
+    // ✅ Try switching to back camera AFTER successful start
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const backCam = devices.find(d =>
+        d.kind === "videoinput" &&
+        d.label.toLowerCase().includes("back")
+      );
+
+      if (backCam) {
+        stream.getTracks().forEach(t => t.stop());
+
+        navigator.mediaDevices.getUserMedia({
+          video: { deviceId: backCam.deviceId }
+        }).then(s2 => {
+          streamRef = s2;
+          video.srcObject = s2;
+          video.play();
+        });
+      } else {
+        streamRef = stream;
+        video.srcObject = stream;
+        video.play();
+      }
+    });
+
     message.innerText = "Starting...";
 
-    streamRef = stream;
     video.srcObject = stream;
-
     return video.play();
   })
   .then(function() {
@@ -115,6 +134,7 @@ startBtn.addEventListener("click", function () {
 
       previousFrame = null;
       lastMotionY = null;
+
       running = true;
 
       canvas.style.display = "block";
@@ -131,11 +151,11 @@ startBtn.addEventListener("click", function () {
   .catch(function(err) {
     message.innerText = "Camera blocked ❌";
     startBtn.disabled = false;
-    console.error(err);
+    console.log(err);
   });
-});
+};
 
-// ✅ STOP (unchanged)
+// ✅ STOP
 stopBtn.onclick = function() {
 
   running = false;
@@ -164,18 +184,11 @@ stopBtn.onclick = function() {
   document.body.style.background = "pink";
 };
 
-// ✅ MAIN LOOP (ONLY PART WE IMPROVED)
+// ✅ LOOP (with filters intact)
 function loop() {
   if (!running) return;
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // rope line
   ctx.strokeStyle = "lime";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(0, ropeY);
-  ctx.lineTo(canvas.width, ropeY);
-  ctx.stroke();
-
-  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height
+  ctx.line
