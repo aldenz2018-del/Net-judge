@@ -4,14 +4,13 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ CORRECT SCRIPT TAGS -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <style>
     body {
       margin: 0;
-      background: yellow;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -38,8 +37,7 @@
 <body>
 
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
-
-<button onclick="start()">START</button>
+<button id="startBtn" onclick="start()">START</button>
 
 <video id="video" playsinline style="display:none;"></video>
 <canvas id="canvas"></canvas>
@@ -47,21 +45,22 @@
 <script>
 let model;
 
-// rope position (adjust if needed)
 let ropeY;
-
 let lastResult = null;
 let lastTime = 0;
-const SHOW_TIME = 3000; // 3 seconds
+const SHOW_TIME = 3000;
 
-// ✅ TRACKING LAST BALL POSITION
-let lastY = null;
+// ✅ TRACK HISTORY
+let history = [];
 
 async function start() {
   const message = document.getElementById("message");
   const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
+
+  startBtn.style.display = "none"; // ✅ remove button after start
 
   message.innerText = "Starting camera...";
 
@@ -80,15 +79,14 @@ async function start() {
   ropeY = canvas.height / 2;
 
   message.innerText = "Loading AI...";
-
   model = await cocoSsd.load();
 
-  message.innerText = "Ready 🎾";
+  message.innerText = "";
 
   function loop() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // ✅ DRAW GREEN LINE
+    // ✅ Draw rope line
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -105,45 +103,50 @@ async function start() {
           const cx = x + w/2;
           const cy = y + h/2;
 
-          // ✅ DRAW BALL DOT
+          // ✅ store history
+          history.push({x: cx, y: cy});
+          if (history.length > 5) history.shift();
+
+          // ✅ draw ball
           ctx.fillStyle = "yellow";
           ctx.beginPath();
           ctx.arc(cx, cy, 8, 0, 2*Math.PI);
           ctx.fill();
-
-          // ✅ CROSSING DETECTION (VERY IMPORTANT)
-          if (lastY !== null) {
-
-            // crossed DOWN → FAULT
-            if (lastY < ropeY && cy >= ropeY) {
-              lastResult = "FAULT";
-              lastTime = Date.now();
-            }
-
-            // crossed UP → GOOD
-            if (lastY >= ropeY && cy < ropeY) {
-              lastResult = "GOOD";
-              lastTime = Date.now();
-            }
-          }
-
-          lastY = cy;
         }
       });
 
-      // ✅ SCREEN FLASH
-      if (Date.now() - lastTime < SHOW_TIME) {
+      // ✅ HIGH SPEED PREDICTION
+      if (history.length >= 2) {
+        const prev = history[history.length - 2];
+        const curr = history[history.length - 1];
 
+        const dy = curr.y - prev.y;
+
+        // predict next position
+        const predictedY = curr.y + dy;
+
+        // ✅ detect crossing even if missed frame
+        if (curr.y < ropeY && predictedY >= ropeY) {
+          lastResult = "FAULT";
+          lastTime = Date.now();
+        }
+
+        if (curr.y >= ropeY && predictedY < ropeY) {
+          lastResult = "GOOD";
+          lastTime = Date.now();
+        }
+      }
+
+      // ✅ flash result
+      if (Date.now() - lastTime < SHOW_TIME) {
         if (lastResult === "GOOD") {
           document.body.style.background = "lime";
           message.innerText = "GOOD";
         }
-
         if (lastResult === "FAULT") {
           document.body.style.background = "red";
           message.innerText = "FAULT";
         }
-
       } else {
         document.body.style.background = "black";
         message.innerText = "";
