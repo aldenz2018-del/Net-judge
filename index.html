@@ -4,10 +4,13 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- ✅ APP ICON (PUT icon.png IN SAME FOLDER) -->
+  <link rel="apple-touch-icon" href="icon.png">
+
   <style>
     body {
       margin: 0;
-      background: black;
+      background: green;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -26,7 +29,6 @@
 
     #stopBtn {
       background: red;
-      color: white;
       display: none;
     }
 
@@ -43,7 +45,7 @@
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
 
-<video id="video" playsinline style="display:none;"></video>
+<video id="video" playsinline></video>
 <canvas id="canvas"></canvas>
 
 <script>
@@ -58,53 +60,42 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// ✅ SETTINGS
+// detection settings
 let lineX;
 let maxHeight;
 const lineWidth = 50;
 
 let previousFrame = null;
-
-// ✅ RESULT STATE
 let lastResult = null;
 let lastTime = 0;
 const GOOD_TIME = 2000;
-const FAULT_TIME = 5000;
+const FAULT_TIME = 4000;
 
-// ✅ PREVENT FAULT SPAM
+// speech control
 let canSpeak = true;
-const SPEAK_COOLDOWN = 1500;
 
-// ✅ SPEAK FUNCTION
 function speakFault() {
   if (!canSpeak) return;
 
-  const speech = new SpeechSynthesisUtterance("Fault");
-  speech.rate = 1.1;
-  speech.pitch = 1.0;
-  speech.volume = 1.0;
-
-  window.speechSynthesis.speak(speech);
+  window.speechSynthesis.speak(
+    new SpeechSynthesisUtterance("Fault")
+  );
 
   canSpeak = false;
-  setTimeout(() => { canSpeak = true; }, SPEAK_COOLDOWN);
+  setTimeout(() => canSpeak = true, 2000);
 }
 
-// ✅ START
+// ✅ START (SIMPLE + RELIABLE)
 startBtn.onclick = async () => {
-  startBtn.disabled = true;
-  message.innerText = "Starting camera...";
-
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
-    });
+    message.innerText = "Starting camera...";
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
     streamRef = stream;
     video.srcObject = stream;
 
     await video.play();
-    await new Promise(r => video.onloadedmetadata = r);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -121,20 +112,16 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera error ❌";
-    console.error(err);
-    startBtn.disabled = false;
+    message.innerText = "Camera blocked ❌";
   }
 };
 
-// ✅ STOP
-stopBtn.onclick = stop;
-
-function stop() {
+// ✅ STOP (FULL RESET)
+stopBtn.onclick = () => {
   running = false;
 
   if (streamRef) {
-    streamRef.getTracks().forEach(track => track.stop());
+    streamRef.getTracks().forEach(t => t.stop());
     streamRef = null;
   }
 
@@ -142,19 +129,14 @@ function stop() {
   video.srcObject = null;
 
   cancelAnimationFrame(animationId);
-
   previousFrame = null;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  message.innerText = "Stopped";
-
   startBtn.style.display = "inline-block";
-  startBtn.disabled = false;
   stopBtn.style.display = "none";
-
-  document.body.style.background = "black";
-}
+  message.innerText = "Stopped";
+};
 
 // ✅ MAIN LOOP
 function loop() {
@@ -162,31 +144,71 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ detection zone
+  // detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ vertical line
-  ctx.strokeStyle = "cyan";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(lineX, 0);
-  ctx.lineTo(lineX, canvas.height);
-  ctx.stroke();
-
-  // ✅ height line
-  ctx.strokeStyle = "red";
-  ctx.beginPath();
-  ctx.moveTo(0, maxHeight);
-  ctx.lineTo(canvas.width, maxHeight);
-  ctx.stroke();
-
-  const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
-    const curr = currentFrame.data;
+    let motionY = 0;
+    let count = 0;
+
+    const curr = frame.data;
     const prev = previousFrame.data;
 
-    let motionX = 0;
-    let motionY = 0;
-    let
+    for (let i = 0; i < curr.length; i += 16) {
+      const pixelIndex = i / 4;
+      const x = pixelIndex % canvas.width;
+
+      if (Math.abs(x - lineX) > lineWidth) continue;
+
+      const diff =
+        Math.abs(curr[i] - prev[i]) +
+        Math.abs(curr[i+1] - prev[i+1]) +
+        Math.abs(curr[i+2] - prev[i+2]);
+
+      if (diff > 60) {
+        const y = Math.floor(pixelIndex / canvas.width);
+        motionY += y;
+        count++;
+      }
+    }
+
+    if (count > 80) {
+      const avgY = motionY / count;
+
+      if (avgY > maxHeight) {
+        if (lastResult !== "FAULT") speakFault();
+        lastResult = "FAULT";
+      } else {
+        lastResult = "GOOD";
+      }
+
+      lastTime = Date.now();
+    }
+  }
+
+  previousFrame = frame;
+
+  let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
+
+  if (Date.now() - lastTime < duration) {
+    if (lastResult === "FAULT") {
+      document.body.style.background = "red";
+      message.innerText = "FAULT";
+    } else {
+      document.body.style.background = "lime";
+      message.innerText = "GOOD";
+    }
+  } else {
+    document.body.style.background = "black";
+    message.innerText = "";
+  }
+
+  animationId = requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
