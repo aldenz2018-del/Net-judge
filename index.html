@@ -5,8 +5,9 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>  
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <!-- ✅ Correct AI scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <style>
     body {
@@ -16,26 +17,27 @@
       font-family: Arial;
     }
 
+    /* ✅ Top message */
     #message {
       position: absolute;
+      top: 30px;
       width: 100%;
       text-align: center;
-      top: 20px;
-      font-size: 40px;
+      font-size: 32px;
       color: white;
       z-index: 5;
     }
 
-#startBtn {
-  position: absolute;
-  top: 85px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 20px;
-  padding: 10px;
-  z-index: 10;
-}
-``
+    /* ✅ Start button BELOW message */
+    #startBtn {
+      position: absolute;
+      top: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      padding: 14px 25px;
+      z-index: 10;
+    }
 
     canvas {
       width: 100vw;
@@ -53,117 +55,119 @@
 <canvas id="canvas"></canvas>
 
 <script>
-<script>
 const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-// 🔧 adjust for your rope
-const ropeY = 250;
+const ropeY = 250;  // adjust this!
 
-let started = false;
+let model;
+let history = [];
+let lastResult = null;
+let lastTime = 0;
+const DISPLAY_TIME = 7000;
 
 startBtn.onclick = async () => {
-  if (started) return;
-  started = true;
-
   startBtn.style.display = "none";
-  message.innerText = "Tap Allow for Camera";
 
   try {
-    // ✅ BASIC camera request (most reliable)
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    message.innerText = "Allow camera access";
 
-    message.innerText = "Camera starting...";
+    // ✅ STEP 1: Start camera (simple + reliable)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" }
+    });
 
     video.srcObject = stream;
-    video.setAttribute("playsinline", true);
-
     await video.play();
 
-    message.innerText = "Camera ready ✅";
+    await new Promise(r => video.onloadedmetadata = r);
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    message.innerText = "Loading AI...";
+
+    // ✅ STEP 2: Load AI AFTER camera works
+    model = await cocoSsd.load();
+
+    message.innerText = "";
+
+    loop();
 
   } catch (err) {
-    message.innerText = "Camera blocked ❌";
+    message.innerText = "Camera error ❌";
     console.error(err);
   }
 };
-</script>
 
+function loop() {
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  function loop() {
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // ✅ Draw green alignment line
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, ropeY);
+  ctx.lineTo(canvas.width, ropeY);
+  ctx.stroke();
 
-    // ✅ draw rope line
-    ctx.strokeStyle = "lime";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, ropeY);
-    ctx.lineTo(canvas.width, ropeY);
-    ctx.stroke();
+  model.detect(video).then(predictions => {
 
-    model.detect(video).then(predictions => {
+    predictions.forEach(pred => {
+      if (pred.class === "sports ball" && pred.score > 0.2) {
 
-      let found = false;
+        const cx = pred.bbox[0] + pred.bbox[2] / 2;
+        const cy = pred.bbox[1] + pred.bbox[3] / 2;
 
-      predictions.forEach(pred => {
-        if (pred.class === "sports ball" && pred.score > 0.2) {
+        // ✅ Store position history
+        history.push({x: cx, y: cy});
+        if (history.length > 5) history.shift();
 
-          const cx = pred.bbox[0] + pred.bbox[2] / 2;
-          const cy = pred.bbox[1] + pred.bbox[3] / 2;
-
-          found = true;
-
-          // ✅ store history
-          history.push({ x: cx, y: cy, t: Date.now() });
-          if (history.length > 5) history.shift();
-
-          // draw ball
-          ctx.fillStyle = "yellow";
-          ctx.beginPath();
-          ctx.arc(cx, cy, 8, 0, 2*Math.PI);
-          ctx.fill();
-        }
-      });
-
-      // ✅ CROSSING DETECTION (key upgrade!)
-      if (history.length >= 2) {
-        let prev = history[history.length - 2];
-        let curr = history[history.length - 1];
-
-        // did it cross the line?
-        if (prev.y < ropeY && curr.y >= ropeY) {
-          lastResult = "FAULT";
-          lastTime = Date.now();
-        }
-
-        if (prev.y >= ropeY && curr.y < ropeY) {
-          lastResult = "GOOD";
-          lastTime = Date.now();
-        }
+        // ✅ Draw tracker
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 8, 0, 2*Math.PI);
+        ctx.fill();
       }
-
-      // ✅ FULL SCREEN FLASH
-      if (Date.now() - lastTime < DISPLAY_TIME) {
-        if (lastResult === "GOOD") {
-          document.body.style.background = "lime";
-          message.innerText = "GOOD";
-        }
-        if (lastResult === "FAULT") {
-          document.body.style.background = "red";
-          message.innerText = "FAULT";
-        }
-      } else {
-        document.body.style.background = "black";
-        message.innerText = "";
-      }
-
-      requestAnimationFrame(loop);
     });
-  }
 
-  loop();
-};
+    // ✅ Line crossing detection
+    if (history.length >= 2) {
+      let prev = history[history.length - 2];
+      let curr = history[history.length - 1];
+
+      if (prev.y < ropeY && curr.y >= ropeY) {
+        lastResult = "FAULT";
+        lastTime = Date.now();
+      }
+
+      if (prev.y >= ropeY && curr.y < ropeY) {
+        lastResult = "GOOD";
+        lastTime = Date.now();
+      }
+    }
+
+    // ✅ Full screen result flash
+    if (Date.now() - lastTime < DISPLAY_TIME) {
+      if (lastResult === "GOOD") {
+        document.body.style.background = "lime";
+        message.innerText = "GOOD";
+      }
+      if (lastResult === "FAULT") {
+        document.body.style.background = "red";
+        message.innerText = "FAULT";
+      }
+    } else {
+      document.body.style.background = "black";
+      message.innerText = "";
+    }
+
+    requestAnimationFrame(loop);
+  });
+}
 </script>
 
 </body>
