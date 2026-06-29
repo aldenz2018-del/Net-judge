@@ -7,18 +7,25 @@
 <style>
 body {
   margin: 0;
-  background: pink;
+  background: black;
   text-align: center;
   font-family: Arial;
 }
 
-#message {
-  margin-top: 20px;
-  font-size: 32px;
+#ui {
+  position: fixed;
+  top: 20px;
+  width: 100%;
+  text-align: center;
+  color: white;
+}
+
+#msg {
+  font-size: 36px;
+  margin-bottom: 20px;
 }
 
 button {
-  margin-top: 20px;
   font-size: 24px;
   padding: 15px 25px;
 }
@@ -39,8 +46,10 @@ video {
 
 <body>
 
-<div id="message">Tap START</div>
-<button id="startBtn">START</button>
+<div id="ui">
+  <div id="msg">Tap START</div>
+  <button id="startBtn">START</button>
+</div>
 
 <video id="video" playsinline muted></video>
 <canvas id="canvas"></canvas>
@@ -51,7 +60,7 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 const btn = document.getElementById("startBtn");
-const msg = document.getElementById("message");
+const msg = document.getElementById("msg");
 
 let prevFrame = null;
 let ropeY = 0;
@@ -59,20 +68,31 @@ let ropeY = 0;
 let lastX = null;
 let lastTrigger = 0;
 
-// 🔊 voice
+// ✅ sound
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ START (safe + stable)
+// ✅ detect if this device should run camera
+function isPhone() {
+  return /iPhone|Android/i.test(navigator.userAgent);
+}
+
+// ✅ START BUTTON (THIS PART IS SAFE)
 btn.onclick = function () {
+
+  // 💻 Laptop just shows screen
+  if (!isPhone()) {
+    msg.innerText = "Viewer Mode";
+    return;
+  }
 
   msg.innerText = "Allow camera";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
+    video: { facingMode: "environment" } // ✅ rear cam
   })
   .then(stream => {
     video.srcObject = stream;
@@ -94,6 +114,7 @@ btn.onclick = function () {
       loop();
 
     }, 400);
+
   })
   .catch(() => {
     msg.innerText = "Camera blocked ❌";
@@ -108,7 +129,7 @@ function loop() {
 
   const midX = canvas.width / 2;
 
-  // ✅ draw vertical crossing line
+  // ✅ vertical crossing line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -116,8 +137,8 @@ function loop() {
   ctx.lineTo(midX, canvas.height);
   ctx.stroke();
 
-  // ✅ draw horizontal rope line
-  ctx.strokeStyle = "blue";
+  // ✅ rope height line
+  ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(0, ropeY);
@@ -151,8 +172,8 @@ function loop() {
 
         totalMotion++;
 
-        // ✅ only near center line
-        if (Math.abs(x - midX) < 60) {
+        // ✅ center strip only
+        if (Math.abs(x - midX) < 80) {
           sumX += x;
           sumY += y;
           count++;
@@ -160,8 +181,8 @@ function loop() {
       }
     }
 
-    // ✅ ignore shake
-    if (count > 80 && totalMotion < 1500) {
+    // ✅ ignore camera shake
+    if (count > 60 && totalMotion < 1500) {
 
       const avgX = sumX / count;
       const avgY = sumY / count;
@@ -174,8 +195,8 @@ function loop() {
         if (
           lastX < midX &&
           avgX >= midX &&
-          speed > 25 &&
-          avgY >= ropeY &&  // ✅ BELOW ROPE = FAULT
+          speed > 20 &&
+          avgY >= ropeY &&   // BELOW rope
           Date.now() - lastTrigger > 2000
         ) {
           trigger();
@@ -184,8 +205,8 @@ function loop() {
         if (
           lastX >= midX &&
           avgX < midX &&
-          speed > 25 &&
-          avgY >= ropeY &&  // ✅ BELOW ROPE = FAULT
+          speed > 20 &&
+          avgY >= ropeY &&
           Date.now() - lastTrigger > 2000
         ) {
           trigger();
@@ -200,18 +221,20 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+
 // ✅ TRIGGER
 function trigger() {
-  document.body.style.background = "red";
+
   msg.innerText = "FAULT";
+  msg.style.color = "red";
 
   speak();
 
   lastTrigger = Date.now();
 
   setTimeout(() => {
-    document.body.style.background = "pink";
     msg.innerText = "";
+    msg.style.color = "white";
   }, 1500);
 }
 </script>
