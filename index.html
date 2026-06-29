@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -69,14 +69,13 @@ let lastTime = 0;
 const GOOD_TIME = 2000;
 const FAULT_TIME = 5000;
 
-// ✅ SPEECH CONTROL (NO SPAM)
+// ✅ prevent speech spam
 let canSpeak = true;
-
 function speakFault() {
   if (!canSpeak) return;
 
   const speech = new SpeechSynthesisUtterance("Fault");
-  window.speechSynthesis.cancel(); // stop overlaps
+  window.speechSynthesis.cancel();
   window.speechSynthesis.speak(speech);
 
   canSpeak = false;
@@ -89,12 +88,20 @@ startBtn.onclick = async () => {
     startBtn.disabled = true;
     message.innerText = "Starting camera...";
 
-    // ✅ reset video fully
     video.srcObject = null;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
-    });
+    let stream;
+
+    // ✅ FORCE BACK CAMERA (safe version)
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } }
+      });
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+    }
 
     streamRef = stream;
     video.srcObject = stream;
@@ -149,17 +156,16 @@ stopBtn.onclick = () => {
   document.body.style.background = "black";
 };
 
-// ✅ MAIN LOOP
+// ✅ LOOP
 function loop() {
   if (!running) return;
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ draw detection zone
+  // ✅ detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ get frame
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
@@ -173,7 +179,6 @@ function loop() {
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
 
-      // ✅ ONLY LINE AREA
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
@@ -188,14 +193,11 @@ function loop() {
       }
     }
 
-    // ✅ MOTION DETECTED
     if (count > 80) {
       const avgY = motionY / count;
 
       if (avgY > maxHeight) {
-        if (lastResult !== "FAULT") {
-          speakFault(); // 🔊 speak once
-        }
+        if (lastResult !== "FAULT") speakFault();
         lastResult = "FAULT";
       } else {
         lastResult = "GOOD";
@@ -207,7 +209,6 @@ function loop() {
 
   previousFrame = frame;
 
-  // ✅ DISPLAY
   let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
 
   if (Date.now() - lastTime < duration) {
