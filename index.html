@@ -8,7 +8,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: hot pink;
       color: white;
       font-family: ariel;
       text-align: center;
@@ -59,6 +59,14 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
+function speak(text) {
+  const speech = new SpeechSynthesisUtterance(text);
+  speech.lang = "en-US";
+  speech.rate = 1.0;
+  speech.pitch = 1.0;
+  window.speechSynthesis.speak(speech);
+}
+  
 // ✅ SETTINGS
 let lineX;
 let maxHeight;
@@ -202,6 +210,7 @@ function loop() {
       // ✅ TRIGGER
       if (avgY > maxHeight) {
         lastResult = "FAULT";
+        speak("Fault");
       } else {
         lastResult = "GOOD";
       }
