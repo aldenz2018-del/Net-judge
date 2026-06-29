@@ -1,23 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>BasementBall</title>
+  <title>Net Judge</title>
 
-  <!-- ✅ Makes it behave like an app -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-  <!-- ✅ AI -->
   https://cdn.jsdelivr.net/npm/@tensorflow/tfjsscript>
   https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssdscript>
 
   <style>
     body {
       margin: 0;
-      overflow: hidden;
       background: black;
-      touch-action: manipulation;
+      overflow: hidden;
     }
 
     #status {
@@ -27,11 +23,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 90px;
+      font-size: 80px;
       font-weight: bold;
-      font-family: Arial;
       color: white;
-      text-align: center;
+      z-index: 10;
     }
 
     #startBtn {
@@ -39,8 +34,13 @@
       top: 20px;
       left: 20px;
       font-size: 20px;
-      padding: 12px;
-      z-index: 10;
+      padding: 10px;
+      z-index: 20;
+    }
+
+    canvas {
+      width: 100vw;
+      height: 100vh;
     }
 
     video {
@@ -53,13 +53,15 @@
 
 <button id="startBtn" onclick="start()">START</button>
 <div id="status">READY</div>
-<video id="video" playsinline></video>
+<video id="video" playsinline autoplay muted></video>
+<canvas id="canvas"></canvas>
 
 <script>
 const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 const statusDiv = document.getElementById("status");
 
-// 🔧 adjust this to match your rope
 const netTop = 180;
 const netBottom = 300;
 
@@ -75,50 +77,55 @@ async function start() {
   });
 
   video.srcObject = stream;
+
   await video.play();
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
   const model = await cocoSsd.load();
 
-  async function detect() {
-    const predictions = await model.detect(video);
+  function loop() {
+    // ✅ DRAW VIDEO TO CANVAS (fixes black screen)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    predictions.forEach(pred => {
-      if (pred.class === "sports ball" && pred.score > 0.3) {
-        const [x, y, w, h] = pred.bbox;
-        const centerY = y + h / 2;
+    model.detect(video).then(predictions => {
+      predictions.forEach(pred => {
+        if (pred.class === "sports ball" && pred.score > 0.2) {
+          const [x, y, w, h] = pred.bbox;
+          const centerY = y + h / 2;
 
-        if (centerY > netBottom) {
-          lastResult = "FAULT";
-          lastTime = Date.now();
-        } 
-        else if (centerY >= netTop && centerY <= netBottom) {
-          lastResult = "GOOD";
-          lastTime = Date.now();
+          if (centerY > netBottom) {
+            lastResult = "FAULT";
+            lastTime = Date.now();
+          } else if (centerY >= netTop && centerY <= netBottom) {
+            lastResult = "GOOD";
+            lastTime = Date.now();
+          }
         }
+      });
+
+      // ✅ FULL SCREEN FLASH
+      if (Date.now() - lastTime < DISPLAY_TIME) {
+        if (lastResult === "GOOD") {
+          document.body.style.background = "lime";
+          statusDiv.innerText = "GOOD";
+        } else if (lastResult === "FAULT") {
+          document.body.style.background = "red";
+          statusDiv.innerText = "FAULT";
+        }
+      } else {
+        document.body.style.background = "black";
+        statusDiv.innerText = "";
       }
+
+      requestAnimationFrame(loop);
     });
-
-    // ✅ FULL SCREEN FLASH DISPLAY
-    if (Date.now() - lastTime < DISPLAY_TIME) {
-      if (lastResult === "GOOD") {
-        document.body.style.background = "lime";
-        statusDiv.innerText = "GOOD";
-      } else if (lastResult === "FAULT") {
-        document.body.style.background = "red";
-        statusDiv.innerText = "FAULT";
-      }
-    } else {
-      document.body.style.background = "black";
-      statusDiv.innerText = "";
-    }
-
-    requestAnimationFrame(detect);
   }
 
-  detect();
+  loop();
 }
 </script>
 
 </body>
 </html>
-
