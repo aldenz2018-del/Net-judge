@@ -8,7 +8,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: black;
       color: white;
       font-family: ariel;
       text-align: center;
@@ -192,11 +192,7 @@ function loop() {
       const avgX = motionX / count;
       const avgY = motionY / count;
 
-      // draw motion point
-      ctx.fillStyle = "yellow";
-      ctx.beginPath();
-      ctx.arc(avgX, avgY, 6, 0, 2*Math.PI);
-      ctx.fill();
+  
 
       // ✅ TRIGGER
       if (avgY > maxHeight) {
