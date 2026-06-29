@@ -4,12 +4,13 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <link rel="apple-touch-icon" href="icon.png">
   <style>
     body {
       margin: 0;
-      background: blue;
+      background: pink;
       color: white;
-      font-family: Arial;
+      font-family: ariel;
       text-align: center;
     }
 
@@ -26,19 +27,12 @@
 
     #stopBtn {
       background: red;
+      color: white;
       display: none;
     }
 
     canvas {
       width: 100%;
-    }
-
-    /* hide video but keep it active */
-    video {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
     }
   </style>
 </head>
@@ -50,12 +44,12 @@
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
 
-<video id="video" playsinline muted></video>
+<video id="video" playsinline style="display:none;"></video>
 <canvas id="canvas"></canvas>
 
 <script>
 let running = false;
-let streamRef = null;
+let streamRef;
 let animationId;
 
 const video = document.getElementById("video");
@@ -65,59 +59,41 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// detection settings
-const lineWidth = 50;
+// ✅ SETTINGS
 let lineX;
 let maxHeight;
+const lineWidth = 50; // ✅ requested width
 
 let previousFrame = null;
 
-// results
 let lastResult = null;
 let lastTime = 0;
-const GOOD_TIME = 2000;
-const FAULT_TIME = 5000;
+const SHOW_TIME = 6000;
 
-// speech control
-let canSpeak = true;
+startBtn.onclick = start;
+stopBtn.onclick = stop;
 
-function speakFault() {
-  if (!canSpeak) return;
+async function start() {
+  startBtn.disabled = false;
+  message.innerText = "Starting camera...";
 
-  const speech = new SpeechSynthesisUtterance("Fault");
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(speech);
-
-  canSpeak = false;
-  setTimeout(() => canSpeak = true, 1500);
-}
-
-// ✅ START (SUPER SIMPLE = NEVER HANGS)
-startBtn.onclick = async () => {
   try {
-    startBtn.disabled = true;
-    message.innerText = "Requesting camera...";
-
-    // ✅ SIMPLE REQUEST (this fixes your issue)
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
+      video: { facingMode: { ideal: "environment" } }
     });
 
     streamRef = stream;
     video.srcObject = stream;
 
     await video.play();
-
     await new Promise(r => video.onloadedmetadata = r);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // detection lines
     lineX = canvas.width / 2;
     maxHeight = canvas.height * 0.6;
 
-    previousFrame = null;
     running = true;
 
     startBtn.style.display = "none";
@@ -127,69 +103,76 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera blocked ❌";
-    startBtn.disabled = false;
+    message.innerText = "Camera error ❌";
     console.error(err);
+    startBtn.disabled = false;
   }
-};
+}
 
-// ✅ STOP
-stopBtn.onclick = () => {
+function stop() {
   running = false;
 
   if (streamRef) {
     streamRef.getTracks().forEach(track => track.stop());
-    streamRef = null;
   }
 
-  video.pause();
-  video.srcObject = null;
-
   cancelAnimationFrame(animationId);
+
   previousFrame = null;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  message.innerText = "Stopped";
 
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
   stopBtn.style.display = "none";
 
-  message.innerText = "Stopped";
   document.body.style.background = "black";
-};
+}
 
-// ✅ LOOP
 function loop() {
   if (!running) return;
 
-  // always draw video first
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // detection zone
+  // ✅ DRAW DETECTION ZONE (cyan)
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ green reference line (TOP layer)
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 5;
+  // ✅ DRAW CENTER LINE
+  ctx.strokeStyle = "cyan";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(lineX, 0);
+  ctx.lineTo(lineX, canvas.height);
+  ctx.stroke();
+
+  // ✅ DRAW HEIGHT LINE (red)
+  ctx.strokeStyle = "red";
   ctx.beginPath();
   ctx.moveTo(0, maxHeight);
   ctx.lineTo(canvas.width, maxHeight);
   ctx.stroke();
 
-  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
-    const curr = frame.data;
+    const curr = currentFrame.data;
     const prev = previousFrame.data;
 
+    let motionX = 0;
     let motionY = 0;
     let count = 0;
 
+    // ✅ ONLY CHECK LINE ZONE
     for (let i = 0; i < curr.length; i += 16) {
+
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
 
+      // ✅ ONLY NEAR LINE
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
@@ -198,17 +181,25 @@ function loop() {
         Math.abs(curr[i+2] - prev[i+2]);
 
       if (diff > 60) {
-        const y = Math.floor(pixelIndex / canvas.width);
+        motionX += x;
         motionY += y;
         count++;
       }
     }
 
+    // ✅ VALID MOTION
     if (count > 80) {
+      const avgX = motionX / count;
       const avgY = motionY / count;
 
+      // draw motion point
+      ctx.fillStyle = "yellow";
+      ctx.beginPath();
+      ctx.arc(avgX, avgY, 6, 0, 2*Math.PI);
+      ctx.fill();
+
+      // ✅ TRIGGER
       if (avgY > maxHeight) {
-        if (lastResult !== "FAULT") speakFault();
         lastResult = "FAULT";
       } else {
         lastResult = "GOOD";
@@ -218,17 +209,16 @@ function loop() {
     }
   }
 
-  previousFrame = frame;
+  previousFrame = currentFrame;
 
-  let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
-
-  if (Date.now() - lastTime < duration) {
-    if (lastResult === "FAULT") {
-      document.body.style.background = "red";
-      message.innerText = "FAULT";
-    } else {
+  // ✅ FLASH RESULT
+  if (Date.now() - lastTime < SHOW_TIME) {
+    if (lastResult === "GOOD") {
       document.body.style.background = "lime";
       message.innerText = "GOOD";
+    } else if (lastResult === "FAULT") {
+      document.body.style.background = "red";
+      message.innerText = "FAULT";
     }
   } else {
     document.body.style.background = "black";
