@@ -37,6 +37,13 @@
       width: 100vw;
       height: 100vh;
     }
+
+    /* ✅ IMPORTANT: keep video visible but invisible */
+    #video {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 
@@ -45,7 +52,7 @@
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
 <button id="startBtn">START</button>
 
-<video id="video" playsinline muted style="position:absolute; left:-9999px;"></video>
+<video id="video" playsinline autoplay muted></video>
 <canvas id="canvas"></canvas>
 
 <script>
@@ -60,8 +67,9 @@ startBtn.onclick = async () => {
   message.innerText = "Allow camera";
 
   try {
+    // ✅ VERY simple + reliable
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
+      video: true
     });
 
     video.srcObject = stream;
@@ -90,4 +98,4 @@ startBtn.onclick = async () => {
 
 </body>
 </html>
-``
+
