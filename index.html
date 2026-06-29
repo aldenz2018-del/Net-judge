@@ -10,7 +10,7 @@
   <style>
     body {
       margin: 0;
-      background: teal;
+      background: pink;
       color: black;
       font-family: Arial;
       text-align: center;
@@ -98,46 +98,61 @@ function speakFault() {
 }
 
 // ✅ START (RELIABLE)
-startBtn.onclick = () => {
-  startBtn.disabled = true;
-  message.innerText = "Tap Allow";
+startBtn.onclick = async () => {
+  try {
+    startBtn.disabled = true;
+    message.innerText = "Starting camera...";
 
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-      message.innerText = "Starting...";
+    // ✅ STEP 1 — always works
+    let stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
-      streamRef = stream;
-      video.srcObject = stream;
+    // ✅ STEP 2 — try to switch to BACK camera AFTER
+    const devices = await navigator.mediaDevices.enumerateDevices();
 
-      return video.play();
-    })
-    .then(() => {
-      setTimeout(() => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+    const backCam = devices.find(d =>
+      d.kind === "videoinput" &&
+      d.label.toLowerCase().includes("back")
+    );
 
-        lineX = canvas.width / 2;
-        maxHeight = canvas.height * 0.6;
+    if (backCam) {
+      stream.getTracks().forEach(t => t.stop()); // stop front cam
 
-        previousFrame = null;
-        lastMotionY = null;
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: backCam.deviceId }
+      });
+    }
 
-        running = true;
+    // ✅ attach FINAL stream
+    streamRef = stream;
+    video.srcObject = stream;
 
-        startBtn.style.display = "none";
-        stopBtn.style.display = "inline-block";
-        message.innerText = "";
+    await video.play();
 
-        loop();
-      }, 200); // ✅ avoids Safari timing bug
-    })
-    .catch(err => {
-      message.innerText = "Camera blocked ❌";
-      startBtn.disabled = false;
-      console.error(err);
-    });
+    await new Promise(r => video.onloadeddata = r);
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    lineX = canvas.width / 2;
+    maxHeight = canvas.height * 0.6;
+
+    previousFrame = null;
+    lastMotionY = null;
+
+    running = true;
+
+    startBtn.style.display = "none";
+    stopBtn.style.display = "inline-block";
+    message.innerText = "";
+
+    loop();
+
+  } catch (err) {
+    message.innerText = "Camera failed ❌";
+    startBtn.disabled = false;
+    console.error(err);
+  }
 };
-
 // ✅ STOP
 stopBtn.onclick = () => {
   running = false;
