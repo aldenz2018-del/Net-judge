@@ -4,14 +4,14 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ Correct scripts -->
-  https://cdn.jsdelivr.net/npm/@tensorflow/tfjsscript>
-  https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssdscript>
+  <!-- ✅ FIXED SCRIPTS -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <style>
     body {
       margin: 0;
-      background: purple;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -45,16 +45,16 @@
 
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
 
-<button id="startBtn" onclick="start()">START</button>
-<button id="stopBtn" onclick="stop()">STOP</button>
+<button id="startBtn">START</button>
+<button id="stopBtn">STOP</button>
 
 <video id="video" playsinline style="display:none;"></video>
 <canvas id="canvas"></canvas>
 
 <script>
 let model;
-let running = false;
 let streamRef = null;
+let running = false;
 let animationId;
 
 const video = document.getElementById("video");
@@ -65,27 +65,27 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
 let ropeY;
-
 let history = [];
 let lastResult = null;
 let lastTime = 0;
 const SHOW_TIME = 3000;
+
+startBtn.onclick = start;
+stopBtn.onclick = stop;
 
 async function start() {
   startBtn.disabled = true;
   message.innerText = "Starting camera...";
 
   try {
-    // ✅ BACK CAMERA
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } }
     });
 
     streamRef = stream;
-
     video.srcObject = stream;
-    await video.play();
 
+    await video.play();
     await new Promise(r => video.onloadedmetadata = r);
 
     canvas.width = video.videoWidth;
@@ -97,7 +97,7 @@ async function start() {
 
     model = await cocoSsd.load();
 
-    // ✅ NOW fully running
+    // ✅ now running
     running = true;
 
     startBtn.style.display = "none";
@@ -106,9 +106,9 @@ async function start() {
 
     loop();
 
-  } catch (error) {
+  } catch (err) {
     message.innerText = "Camera failed ❌";
-    console.error(error);
+    console.error(err);
     startBtn.disabled = false;
   }
 }
@@ -116,7 +116,6 @@ async function start() {
 function stop() {
   running = false;
 
-  // ✅ stop camera
   if (streamRef) {
     streamRef.getTracks().forEach(track => track.stop());
   }
@@ -150,9 +149,8 @@ function loop() {
     predictions.forEach(pred => {
       if (pred.class === "sports ball" && pred.score > 0.3) {
 
-        const [x, y, w, h] = pred.bbox;
-        const cx = x + w/2;
-        const cy = y + h/2;
+        const cx = pred.bbox[0] + pred.bbox[2] / 2;
+        const cy = pred.bbox[1] + pred.bbox[3] / 2;
 
         history.push({x: cx, y: cy});
         if (history.length > 5) history.shift();
@@ -164,7 +162,6 @@ function loop() {
       }
     });
 
-    // ✅ prediction logic
     if (history.length >= 2) {
       const prev = history[history.length - 2];
       const curr = history[history.length - 1];
@@ -183,7 +180,7 @@ function loop() {
       }
     }
 
-    // ✅ flash result
+    // ✅ flashing
     if (Date.now() - lastTime < SHOW_TIME) {
       if (lastResult === "GOOD") {
         document.body.style.background = "lime";
@@ -204,3 +201,4 @@ function loop() {
 
 </body>
 </html>
+``
