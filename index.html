@@ -74,7 +74,10 @@ let previousFrame = null;
 let ropeY = 0;
 
 let lastTriggerTime = 0;
-const COOLDOWN = 2000; // 2 seconds
+const COOLDOWN = 2000;
+
+// ✅ NEW: tracking for motion filtering
+let lastMotionY = null;
 
 // ✅ voice
 function speakFault() {
@@ -83,14 +86,14 @@ function speakFault() {
   window.speechSynthesis.speak(s);
 }
 
-// ✅ START
+// ✅ START (unchanged, stable)
 startBtn.addEventListener("click", function () {
 
   startBtn.disabled = true;
   message.innerText = "Requesting camera...";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" } // ✅ BACK CAMERA
+    video: { facingMode: "environment" }
   })
   .then(function(stream) {
 
@@ -111,6 +114,7 @@ startBtn.addEventListener("click", function () {
       ropeY = canvas.height * 0.5;
 
       previousFrame = null;
+      lastMotionY = null;
       running = true;
 
       canvas.style.display = "block";
@@ -131,7 +135,7 @@ startBtn.addEventListener("click", function () {
   });
 });
 
-// ✅ STOP
+// ✅ STOP (unchanged)
 stopBtn.onclick = function() {
 
   running = false;
@@ -146,6 +150,7 @@ stopBtn.onclick = function() {
 
   cancelAnimationFrame(animationId);
   previousFrame = null;
+  lastMotionY = null;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -159,7 +164,7 @@ stopBtn.onclick = function() {
   document.body.style.background = "pink";
 };
 
-// ✅ LOOP
+// ✅ MAIN LOOP (ONLY PART WE IMPROVED)
 function loop() {
   if (!running) return;
 
@@ -173,58 +178,4 @@ function loop() {
   ctx.lineTo(canvas.width, ropeY);
   ctx.stroke();
 
-  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-  if (previousFrame) {
-
-    let motionBelow = 0;
-
-    const curr = frame.data;
-    const prev = previousFrame.data;
-
-    for (let i = 0; i < curr.length; i += 16) {
-
-      const pixelIndex = i / 4;
-      const y = Math.floor(pixelIndex / canvas.width);
-
-      // ONLY below rope
-      if (y < ropeY) continue;
-
-      const diff =
-        Math.abs(curr[i] - prev[i]) +
-        Math.abs(curr[i+1] - prev[i+1]) +
-        Math.abs(curr[i+2] - prev[i+2]);
-
-      if (diff > 60) {
-        motionBelow++;
-      }
-    }
-
-    // ✅ only trigger if BIG motion spike
-    if (motionBelow > 300) {
-
-      if (Date.now() - lastTriggerTime > COOLDOWN) {
-
-        document.body.style.background = "red";
-        message.innerText = "FAULT";
-
-        speakFault();
-
-        lastTriggerTime = Date.now();
-
-        // ✅ return to normal after 1.5 sec
-        setTimeout(() => {
-          document.body.style.background = "pink";
-          message.innerText = "";
-        }, 1500);
-      }
-    }
-  }
-
-  previousFrame = frame;
-  animationId = requestAnimationFrame(loop);
-}
-</script>
-
-</body>
-</html>
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height
