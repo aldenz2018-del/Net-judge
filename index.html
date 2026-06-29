@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -33,7 +33,7 @@
       width: 100%;
     }
 
-    /* ✅ critical: hide real video so only canvas shows */
+    /* hide raw video (prevents double camera) */
     video {
       position: absolute;
       width: 1px;
@@ -66,12 +66,11 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// ✅ SETTINGS
+// detection settings
 const lineWidth = 50;
 let lineX;
 let maxHeight;
 
-// motion
 let previousFrame = null;
 
 // result timing
@@ -80,8 +79,10 @@ let lastTime = 0;
 const GOOD_TIME = 2000;
 const FAULT_TIME = 5000;
 
-// voice (no spam)
+// speech anti-spam
 let canSpeak = true;
+
+// ✅ speak FAULT once only
 function speakFault() {
   if (!canSpeak) return;
 
@@ -93,48 +94,42 @@ function speakFault() {
   setTimeout(() => canSpeak = true, 1500);
 }
 
-// ✅ START
+// ✅ START (simple and reliable)
 startBtn.onclick = async () => {
   try {
     startBtn.disabled = true;
-    message.innerText = "Starting camera...";
-  
-  // ✅ ALWAYS WORKING VERSION (no hanging)
-const stream = await navigator.mediaDevices.getUserMedia({
-  video: true
-});
+    message.innerText = "Requesting camera...";
 
-// ✅ THEN try to switch to back camera if possible
-const track = stream.getVideoTracks()[0];
-const capabilities = track.getCapabilities?.();
+    // ✅ always works (no strict constraints)
+    let stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
-if (capabilities && capabilities.facingMode) {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const backCam = devices.find(d => d.kind === "videoinput" && d.label.toLowerCase().includes("back"));
+    // ✅ try to switch to back camera if available
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const backCam = devices.find(d =>
+        d.kind === "videoinput" &&
+        d.label.toLowerCase().includes("back")
+      );
 
-  if (backCam) {
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: backCam.deviceId }
-    });
+      if (backCam) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: backCam.deviceId }
+        });
+      }
+    } catch {} // ignore errors safely
 
-    stream.getTracks().forEach(t => t.stop());
-    streamRef = newStream;
-    video.srcObject = newStream;
-  } else {
     streamRef = stream;
     video.srcObject = stream;
-  }
-} else {
-  streamRef = stream;
-  video.srcObject = stream;
-}
+
     await video.play();
+
     await new Promise(r => video.onloadedmetadata = r);
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // ✅ reference positions
+    // ✅ set detection areas AFTER camera loads
     lineX = canvas.width / 2;
     maxHeight = canvas.height * 0.6;
 
@@ -148,13 +143,13 @@ if (capabilities && capabilities.facingMode) {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera error ❌";
+    message.innerText = "Camera blocked ❌";
     startBtn.disabled = false;
     console.error(err);
   }
 };
 
-// ✅ STOP
+// ✅ STOP (full reset)
 stopBtn.onclick = () => {
   running = false;
 
@@ -183,14 +178,14 @@ stopBtn.onclick = () => {
 function loop() {
   if (!running) return;
 
-  // ✅ 1. draw camera FIRST
+  // ✅ draw camera first
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ 2. draw detection zone
+  // ✅ draw detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ 3. draw GREEN reference line (ON TOP)
+  // ✅ draw GREEN line (always visible)
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -198,7 +193,6 @@ function loop() {
   ctx.lineTo(canvas.width, maxHeight);
   ctx.stroke();
 
-  // ✅ get frame AFTER drawing video
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (previousFrame) {
@@ -212,7 +206,7 @@ function loop() {
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
 
-      // ✅ only detect on vertical line area
+      // ✅ ONLY detect near line
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
@@ -243,14 +237,13 @@ function loop() {
 
   previousFrame = frame;
 
-  // ✅ RESULT DISPLAY
   let duration = lastResult === "FAULT" ? FAULT_TIME : GOOD_TIME;
 
   if (Date.now() - lastTime < duration) {
     if (lastResult === "FAULT") {
       document.body.style.background = "red";
       message.innerText = "FAULT";
-    } else if (lastResult === "GOOD") {
+    } else {
       document.body.style.background = "lime";
       message.innerText = "GOOD";
     }
