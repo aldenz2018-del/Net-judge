@@ -5,13 +5,14 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- ✅ FIXED SCRIPT TAGS (CRITICAL) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <style>
     body {
       margin: 0;
-      background: red;
+      background: black;
       color: white;
       font-family: Arial;
       overflow: hidden;
@@ -41,11 +42,9 @@
       height: 100vh;
     }
 
-    /* ✅ IMPORTANT: keep video visible but invisible */
-    #video {
+    video {
       position: absolute;
-      opacity: 0;
-      pointer-events: none;
+      opacity: 0;   /* ✅ important */
     }
   </style>
 </head>
@@ -70,9 +69,8 @@ startBtn.onclick = async () => {
   message.innerText = "Allow camera";
 
   try {
-    // ✅ VERY simple + reliable
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
+      video: { facingMode: "environment" }
     });
 
     video.srcObject = stream;
@@ -93,7 +91,7 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera blocked ❌";
+    message.innerText = "Camera failed ❌";
     console.error(err);
   }
 };
@@ -101,4 +99,4 @@ startBtn.onclick = async () => {
 
 </body>
 </html>
-
+``
