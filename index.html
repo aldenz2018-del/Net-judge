@@ -54,23 +54,25 @@ const btn = document.getElementById("startBtn");
 const msg = document.getElementById("message");
 
 let prevFrame = null;
+let ropeY = 0;
+
 let lastX = null;
 let lastTrigger = 0;
 
-// 🔊 sound
+// 🔊 voice
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ START (safe + rear camera)
+// ✅ START (safe + stable)
 btn.onclick = function () {
 
   msg.innerText = "Allow camera";
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" } // ✅ rear camera
+    video: { facingMode: "environment" }
   })
   .then(stream => {
     video.srcObject = stream;
@@ -83,6 +85,8 @@ btn.onclick = function () {
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
 
+      ropeY = canvas.height * 0.5;
+
       canvas.style.display = "block";
       btn.style.display = "none";
       msg.innerText = "";
@@ -90,7 +94,6 @@ btn.onclick = function () {
       loop();
 
     }, 400);
-
   })
   .catch(() => {
     msg.innerText = "Camera blocked ❌";
@@ -103,9 +106,9 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ vertical center line
   const midX = canvas.width / 2;
 
+  // ✅ draw vertical crossing line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -113,11 +116,20 @@ function loop() {
   ctx.lineTo(midX, canvas.height);
   ctx.stroke();
 
+  // ✅ draw horizontal rope line
+  ctx.strokeStyle = "blue";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, ropeY);
+  ctx.lineTo(canvas.width, ropeY);
+  ctx.stroke();
+
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   if (prevFrame) {
 
     let sumX = 0;
+    let sumY = 0;
     let count = 0;
     let totalMotion = 0;
 
@@ -135,33 +147,35 @@ function loop() {
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
-      // ignore weak motion
       if (diff > 90) {
 
         totalMotion++;
 
-        // ✅ ONLY small center region
+        // ✅ only near center line
         if (Math.abs(x - midX) < 60) {
           sumX += x;
+          sumY += y;
           count++;
         }
       }
     }
 
-    // ✅ ignore shake (too much global motion)
+    // ✅ ignore shake
     if (count > 80 && totalMotion < 1500) {
 
       const avgX = sumX / count;
+      const avgY = sumY / count;
 
       if (lastX !== null) {
 
         const speed = Math.abs(avgX - lastX);
 
-        // ✅ CROSSING DETECTION
+        // ✅ CROSSING + HEIGHT CHECK
         if (
-          lastX < midX &&   // was left
-          avgX >= midX &&   // now right
-          speed > 25 &&     // fast = ball
+          lastX < midX &&
+          avgX >= midX &&
+          speed > 25 &&
+          avgY >= ropeY &&  // ✅ BELOW ROPE = FAULT
           Date.now() - lastTrigger > 2000
         ) {
           trigger();
@@ -171,6 +185,7 @@ function loop() {
           lastX >= midX &&
           avgX < midX &&
           speed > 25 &&
+          avgY >= ropeY &&  // ✅ BELOW ROPE = FAULT
           Date.now() - lastTrigger > 2000
         ) {
           trigger();
@@ -185,7 +200,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ✅ trigger result
+// ✅ TRIGGER
 function trigger() {
   document.body.style.background = "red";
   msg.innerText = "FAULT";
