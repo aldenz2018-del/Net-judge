@@ -151,6 +151,14 @@ stopBtn.onclick = () => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // ✅ GREEN reference line (GOOD / FAULT line)
+ctx.strokeStyle = "lime";
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(0, maxHeight);
+ctx.lineTo(canvas.width, maxHeight);
+ctx.stroke();
+  
   startBtn.style.display = "inline-block";
   startBtn.disabled = false;
   stopBtn.style.display = "none";
