@@ -94,7 +94,12 @@ function speakFault() {
 }
 
 // ✅ START
-// ✅ ALWAYS WORKING VERSION (no hanging)
+startBtn.onclick = async () => {
+  try {
+    startBtn.disabled = true;
+    message.innerText = "Starting camera...";
+  
+  // ✅ ALWAYS WORKING VERSION (no hanging)
 const stream = await navigator.mediaDevices.getUserMedia({
   video: true
 });
