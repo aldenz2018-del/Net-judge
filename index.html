@@ -53,33 +53,31 @@ const ctx = canvas.getContext("2d");
 const btn = document.getElementById("startBtn");
 const msg = document.getElementById("message");
 
-let previousFrame = null;
+let prevFrame = null;
 let ropeY = 0;
+
 let lastY = null;
 let lastTrigger = 0;
 
-// 🔊 SOUND
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ ✅ START — SIMPLE + STABLE (DO NOT TOUCH THIS STRUCTURE)
+// ✅ SIMPLE START (THIS IS WHY IT WORKS)
 btn.onclick = function () {
 
-  msg.innerText = "Allow camera…";
+  msg.innerText = "Allow camera";
 
   navigator.mediaDevices.getUserMedia({ video: true })
-    .then(function(stream) {
-
+    .then(stream => {
       video.srcObject = stream;
       return video.play();
     })
-    .then(function() {
+    .then(() => {
 
-      // ✅ WAIT — THIS FIXES BLANK SCREEN
-      setTimeout(function() {
+      setTimeout(() => {
 
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
@@ -90,20 +88,17 @@ btn.onclick = function () {
         btn.style.display = "none";
         msg.innerText = "";
 
-        previousFrame = null;
-        lastY = null;
-
         loop();
 
       }, 400);
     })
-    .catch(function() {
+    .catch(() => {
       msg.innerText = "Camera blocked ❌";
     });
 };
 
 
-// ✅ ✅ MAIN LOOP
+// ✅ DETECTION LOOP
 function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -118,15 +113,16 @@ function loop() {
 
   const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  if (previousFrame) {
+  if (prevFrame) {
 
-    let motionY = 0;
+    let sumY = 0;
     let count = 0;
+    let totalMotion = 0;
 
     const curr = frame.data;
-    const prev = previousFrame.data;
+    const prev = prevFrame.data;
 
-    const centerX = canvas.width / 2;
+    const center = canvas.width / 2;
 
     for (let i = 0; i < curr.length; i += 16) {
 
@@ -134,38 +130,37 @@ function loop() {
       const x = idx % canvas.width;
       const y = Math.floor(idx / canvas.width);
 
-      // ONLY center strip
-      if (Math.abs(x - centerX) > 80) continue;
-
       const diff =
         Math.abs(curr[i] - prev[i]) +
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
-      // tighter threshold
       if (diff > 90) {
 
-        // ONLY BELOW ROPE
-        if (y >= ropeY) {
-          motionY += y;
+        totalMotion++;
+
+        // only center strip + below rope
+        if (Math.abs(x - center) < 80 && y >= ropeY) {
+          sumY += y;
           count++;
         }
       }
     }
 
-    if (count > 120) {
+    // ✅ ignore camera shake
+    if (count > 120 && totalMotion < 1500) {
 
-      const avgY = motionY / count;
+      const avgY = sumY / count;
 
       if (lastY !== null) {
 
         const speed = Math.abs(avgY - lastY);
 
-        // ✅ ✅ CROSSING + SPEED FILTER
+        // ✅ CROSSING LOGIC
         if (
-          lastY < ropeY &&   // was above
-          avgY >= ropeY &&   // now below
-          speed > 25 &&      // fast object (ball)
+          lastY < ropeY &&     // was above
+          avgY >= ropeY &&     // now below
+          speed > 25 &&        // fast = ball
           Date.now() - lastTrigger > 2000
         ) {
 
@@ -187,7 +182,7 @@ function loop() {
     }
   }
 
-  previousFrame = frame;
+  prevFrame = frame;
   requestAnimationFrame(loop);
 }
 </script>
