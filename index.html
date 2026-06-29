@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: green;
+      background: black;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -27,6 +27,7 @@
     video {
       width: 100%;
       margin-top: 20px;
+      background: black; /* helps visibility */
     }
   </style>
 </head>
@@ -47,12 +48,14 @@ async function start() {
   message.innerText = "Requesting camera...";
 
   try {
-    // ✅ EXACT same pattern as working test
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true
     });
 
     video.srcObject = stream;
+
+    // ✅ THIS LINE FIXES YOUR ISSUE
+    await video.play();
 
     message.innerText = "Camera Ready ✅";
 
