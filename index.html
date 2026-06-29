@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: black;
+      background: blue;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -33,13 +33,12 @@
       width: 100%;
     }
 
-    /* hide raw video (prevents double camera) */
+    /* hide video but keep it active */
     video {
       position: absolute;
       width: 1px;
       height: 1px;
       opacity: 0;
-      pointer-events: none;
     }
   </style>
 </head>
@@ -73,16 +72,15 @@ let maxHeight;
 
 let previousFrame = null;
 
-// result timing
+// results
 let lastResult = null;
 let lastTime = 0;
 const GOOD_TIME = 2000;
 const FAULT_TIME = 5000;
 
-// speech anti-spam
+// speech control
 let canSpeak = true;
 
-// ✅ speak FAULT once only
 function speakFault() {
   if (!canSpeak) return;
 
@@ -94,30 +92,16 @@ function speakFault() {
   setTimeout(() => canSpeak = true, 1500);
 }
 
-// ✅ START (simple and reliable)
+// ✅ START (SUPER SIMPLE = NEVER HANGS)
 startBtn.onclick = async () => {
   try {
     startBtn.disabled = true;
     message.innerText = "Requesting camera...";
 
-    // ✅ always works (no strict constraints)
-    let stream = await navigator.mediaDevices.getUserMedia({ video: true });
-
-    // ✅ try to switch to back camera if available
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const backCam = devices.find(d =>
-        d.kind === "videoinput" &&
-        d.label.toLowerCase().includes("back")
-      );
-
-      if (backCam) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: backCam.deviceId }
-        });
-      }
-    } catch {} // ignore errors safely
+    // ✅ SIMPLE REQUEST (this fixes your issue)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true
+    });
 
     streamRef = stream;
     video.srcObject = stream;
@@ -129,7 +113,7 @@ startBtn.onclick = async () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // ✅ set detection areas AFTER camera loads
+    // detection lines
     lineX = canvas.width / 2;
     maxHeight = canvas.height * 0.6;
 
@@ -149,7 +133,7 @@ startBtn.onclick = async () => {
   }
 };
 
-// ✅ STOP (full reset)
+// ✅ STOP
 stopBtn.onclick = () => {
   running = false;
 
@@ -174,18 +158,18 @@ stopBtn.onclick = () => {
   document.body.style.background = "black";
 };
 
-// ✅ MAIN LOOP
+// ✅ LOOP
 function loop() {
   if (!running) return;
 
-  // ✅ draw camera first
+  // always draw video first
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ draw detection zone
+  // detection zone
   ctx.fillStyle = "rgba(0,255,255,0.15)";
   ctx.fillRect(lineX - lineWidth, 0, lineWidth * 2, canvas.height);
 
-  // ✅ draw GREEN line (always visible)
+  // ✅ green reference line (TOP layer)
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -206,7 +190,6 @@ function loop() {
       const pixelIndex = i / 4;
       const x = pixelIndex % canvas.width;
 
-      // ✅ ONLY detect near line
       if (Math.abs(x - lineX) > lineWidth) continue;
 
       const diff =
