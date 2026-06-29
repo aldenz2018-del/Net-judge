@@ -12,7 +12,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: purple;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -72,10 +72,10 @@ let maxHeight;
 let history = [];
 let lastResult = null;
 let lastTime = 0;
-const SHOW_TIME = 3000;
+const SHOW_TIME = 6000;
 
 async function start() {
-  startBtn.disabled = true;
+  startBtn.disabled = false;
   message.innerText = "Starting camera...";
 
   try {
