@@ -1,58 +1,53 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Net Judge</title>
+  <title>BasementBall</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="apple-mobile-web-app-capable" content="yes">
 
+  <!-- ✅ FIXED SCRIPT TAGS -->
   https://cdn.jsdelivr.net/npm/@tensorflow/tfjsscript>
   https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssdscript>
 
   <style>
     body {
       margin: 0;
-      background: black;
+      background: pink;
       overflow: hidden;
     }
 
     #status {
       position: absolute;
       width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 80px;
-      font-weight: bold;
+      text-align: center;
+      top: 20px;
+      font-size: 40px;
       color: white;
       z-index: 10;
     }
 
     #startBtn {
       position: absolute;
-      top: 20px;
-      left: 20px;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
       font-size: 20px;
       padding: 10px;
-      z-index: 20;
+      z-index: 10;
     }
 
     canvas {
       width: 100vw;
       height: 100vh;
     }
-
-    video {
-      display: none;
-    }
   </style>
 </head>
 
 <body>
 
-<button id="startBtn" onclick="start()">START</button>
-<div id="status">READY</div>
+<div id="status">Happy 11th Birthday Mattie</div>
+<button id="startBtn">GO</button>
+
 <video id="video" playsinline autoplay muted></video>
 <canvas id="canvas"></canvas>
 
@@ -61,7 +56,9 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const statusDiv = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
 
+// 🔧 adjust for your net
 const netTop = 180;
 const netBottom = 300;
 
@@ -69,62 +66,73 @@ let lastResult = null;
 let lastTime = 0;
 const DISPLAY_TIME = 7000;
 
-async function start() {
-  document.getElementById("startBtn").style.display = "none";
+startBtn.onclick = async () => {
+  try {
+    statusDiv.innerText = "Starting...";
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
-  });
-
-  video.srcObject = stream;
-
-  await video.play();
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  const model = await cocoSsd.load();
-
-  function loop() {
-    // ✅ DRAW VIDEO TO CANVAS (fixes black screen)
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    model.detect(video).then(predictions => {
-      predictions.forEach(pred => {
-        if (pred.class === "sports ball" && pred.score > 0.2) {
-          const [x, y, w, h] = pred.bbox;
-          const centerY = y + h / 2;
-
-          if (centerY > netBottom) {
-            lastResult = "FAULT";
-            lastTime = Date.now();
-          } else if (centerY >= netTop && centerY <= netBottom) {
-            lastResult = "GOOD";
-            lastTime = Date.now();
-          }
-        }
-      });
-
-      // ✅ FULL SCREEN FLASH
-      if (Date.now() - lastTime < DISPLAY_TIME) {
-        if (lastResult === "GOOD") {
-          document.body.style.background = "lime";
-          statusDiv.innerText = "GOOD";
-        } else if (lastResult === "FAULT") {
-          document.body.style.background = "red";
-          statusDiv.innerText = "FAULT";
-        }
-      } else {
-        document.body.style.background = "black";
-        statusDiv.innerText = "";
-      }
-
-      requestAnimationFrame(loop);
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" }
     });
-  }
 
-  loop();
-}
+    video.srcObject = stream;
+    await video.play();
+
+    // ✅ SET CANVAS SIZE AFTER VIDEO LOADS
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    statusDiv.innerText = "Loading AI...";
+
+    const model = await cocoSsd.load();
+
+    statusDiv.innerText = "";
+
+    function loop() {
+      // ✅ ALWAYS DRAW VIDEO (fixes black screen)
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      model.detect(video).then(predictions => {
+        predictions.forEach(pred => {
+          if (pred.class === "sports ball" && pred.score > 0.2) {
+            const [x, y, w, h] = pred.bbox;
+            const centerY = y + h / 2;
+
+            if (centerY > netBottom) {
+              lastResult = "FAULT";
+              lastTime = Date.now();
+            } 
+            else if (centerY >= netTop && centerY <= netBottom) {
+              lastResult = "GOOD";
+              lastTime = Date.now();
+            }
+          }
+        });
+
+        // ✅ FULL SCREEN FLASH
+        if (Date.now() - lastTime < DISPLAY_TIME) {
+          if (lastResult === "GOOD") {
+            document.body.style.background = "lime";
+            statusDiv.innerText = "GOOD";
+          } else if (lastResult === "FAULT") {
+            document.body.style.background = "red";
+            statusDiv.innerText = "FAULT";
+          }
+        } else {
+          document.body.style.background = "black";
+          statusDiv.innerText = "";
+        }
+
+        requestAnimationFrame(loop);
+      });
+    }
+
+    loop();
+
+  } catch (err) {
+    statusDiv.innerText = "ERROR: " + err.message;
+    console.log(err);
+  }
+};
 </script>
 
 </body>
