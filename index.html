@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: black;
+      background: pink;
       color: white;
       font-family: Arial;
       text-align: center;
@@ -94,28 +94,35 @@ function speakFault() {
 }
 
 // ✅ START
-startBtn.onclick = async () => {
-  try {
-    startBtn.disabled = true;
-    message.innerText = "Starting camera...";
+// ✅ ALWAYS WORKING VERSION (no hanging)
+const stream = await navigator.mediaDevices.getUserMedia({
+  video: true
+});
 
-    video.srcObject = null;
+// ✅ THEN try to switch to back camera if possible
+const track = stream.getVideoTracks()[0];
+const capabilities = track.getCapabilities?.();
 
-    // ✅ force back camera
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: "environment" } }
-      });
-    } catch {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-    }
+if (capabilities && capabilities.facingMode) {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const backCam = devices.find(d => d.kind === "videoinput" && d.label.toLowerCase().includes("back"));
 
+  if (backCam) {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: backCam.deviceId }
+    });
+
+    stream.getTracks().forEach(t => t.stop());
+    streamRef = newStream;
+    video.srcObject = newStream;
+  } else {
     streamRef = stream;
     video.srcObject = stream;
-
+  }
+} else {
+  streamRef = stream;
+  video.srcObject = stream;
+}
     await video.play();
     await new Promise(r => video.onloadedmetadata = r);
 
