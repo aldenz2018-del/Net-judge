@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: green;
       color: black;
       font-family: Arial;
       text-align: center;
@@ -35,7 +35,7 @@
       width: 100%;
     }
 
-    /* hide raw video input */
+    /* hide raw camera feed */
     video {
       position: absolute;
       width: 1px;
@@ -68,7 +68,7 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
 let previousFrame = null;
-let ropeY;
+let ropeY = 0;
 let lastFaultTime = 0;
 
 // ✅ voice
@@ -78,39 +78,45 @@ function speakFault() {
   window.speechSynthesis.speak(s);
 }
 
-// ✅ START (stable)
+// ✅ START (FIXED + RELIABLE)
 startBtn.onclick = async () => {
-  try {
-    startBtn.disabled = true;
-    message.innerText = "Starting camera...";
+  startBtn.disabled = true;
+  message.innerText = "Tap Allow";
 
+  try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true
     });
 
+    message.innerText = "Starting...";
+
     streamRef = stream;
     video.srcObject = stream;
 
+    // ✅ must happen after click
     await video.play();
-    await new Promise(r => video.onloadeddata = r);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // ✅ small delay prevents Safari hang
+    setTimeout(() => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-    ropeY = canvas.height * 0.5; // adjust if needed
+      ropeY = canvas.height * 0.5;
 
-    previousFrame = null;
-    running = true;
+      previousFrame = null;
+      running = true;
 
-    startBtn.style.display = "none";
-    stopBtn.style.display = "inline-block";
-    message.innerText = "";
+      startBtn.style.display = "none";
+      stopBtn.style.display = "inline-block";
+      message.innerText = "";
 
-    loop();
+      loop();
+    }, 200);
 
   } catch (err) {
     message.innerText = "Camera blocked ❌";
     startBtn.disabled = false;
+    console.error(err);
   }
 };
 
@@ -143,9 +149,10 @@ stopBtn.onclick = () => {
 function loop() {
   if (!running) return;
 
+  // draw camera
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ rope reference
+  // ✅ rope line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -165,7 +172,7 @@ function loop() {
       const pixelIndex = i / 4;
       const y = Math.floor(pixelIndex / canvas.width);
 
-      // ✅ ONLY check below rope
+      // ✅ ONLY detect BELOW rope
       if (y < ropeY) continue;
 
       const diff =
@@ -178,24 +185,13 @@ function loop() {
       }
     }
 
-    // ✅ FAULT detection
+    // ✅ trigger FAULT
     if (motionBelow > 120) {
 
       if (Date.now() - lastFaultTime > 1500) {
-
         document.body.style.background = "red";
         message.innerText = "FAULT";
         speakFault();
-
         lastFaultTime = Date.now();
-      }
-    }
-  }
 
-  previousFrame = frame;
-  animationId = requestAnimationFrame(loop);
-}
-</script>
-
-</body>
-</html>
+    
