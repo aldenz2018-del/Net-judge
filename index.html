@@ -68,8 +68,9 @@ let previousFrame = null;
 
 let lastResult = null;
 let lastTime = 0;
-const SHOW_TIME = 6000;
-
+const GOOD_TIME = 2000;   // 2 seconds
+const FAULT_TIME = 5000;  // 5 seconds (longer!)
+  
 startBtn.onclick = start;
 stopBtn.onclick = stop;
 
