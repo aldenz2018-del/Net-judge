@@ -10,7 +10,7 @@
   <style>
     body {
       margin: 0;
-      background: pink;
+      background: orange;
       color: black;
       font-family: Arial;
       text-align: center;
@@ -101,17 +101,28 @@ function speakFault() {
 startBtn.onclick = async () => {
   try {
     startBtn.disabled = true;
-    message.innerText = "Starting camera...";
+    message.innerText = "Tap Allow for Camera";
 
+    // ✅ force clean reset
+    video.srcObject = null;
+
+    // ✅ simplest possible request (THIS is key)
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true
     });
 
+    message.innerText = "Starting...";
+
     streamRef = stream;
     video.srcObject = stream;
 
+    // ✅ must call play AFTER user interaction
     await video.play();
-    await new Promise(r => video.onloadedmetadata = r);
+
+    // ✅ wait for real video size
+    await new Promise(resolve => {
+      video.onloadeddata = resolve;
+    });
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -131,9 +142,9 @@ startBtn.onclick = async () => {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera blocked ❌";
+    message.innerText = "Camera failed ❌";
     startBtn.disabled = false;
-    console.error(err);
+    console.error("Camera error:", err);
   }
 };
 
