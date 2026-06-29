@@ -4,9 +4,9 @@
   <title>BasementBall</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ FIXED SCRIPTS -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <!-- ✅ CORRECT SCRIPT TAGS -->
+  https://cdn.jsdelivr.net/npm/@tensorflow/tfjsscript>
+  https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssdscript>
 
   <style>
     body {
@@ -18,12 +18,12 @@
     }
 
     #message {
-      margin-top: 40px;
+      margin-top: 20px;
       font-size: 28px;
     }
 
     button {
-      margin-top: 20px;
+      margin-top: 10px;
       font-size: 22px;
       padding: 12px 20px;
     }
@@ -36,7 +36,6 @@
 
     canvas {
       width: 100%;
-      margin-top: 10px;
     }
   </style>
 </head>
@@ -45,16 +44,16 @@
 
 <div id="message">🎉 Happy 11th Birthday Mattie 🎉</div>
 
-<button id="startBtn">START</button>
-<button id="stopBtn">STOP</button>
+<button id="startBtn" onclick="start()">START</button>
+<button id="stopBtn" onclick="stop()">STOP</button>
 
 <video id="video" playsinline style="display:none;"></video>
 <canvas id="canvas"></canvas>
 
 <script>
 let model;
-let streamRef = null;
 let running = false;
+let streamRef;
 let animationId;
 
 const video = document.getElementById("video");
@@ -64,17 +63,18 @@ const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-let ropeY;
+// ✅ DETECTION SETTINGS
+let lineX;
+let maxHeight;
+
+// ✅ TRACKING
 let history = [];
 let lastResult = null;
 let lastTime = 0;
-const SHOW_TIME = 6000;
-
-startBtn.onclick = start;
-stopBtn.onclick = stop;
+const SHOW_TIME = 3000;
 
 async function start() {
-  startBtn.disabled = false;
+  startBtn.disabled = true;
   message.innerText = "Starting camera...";
 
   try {
@@ -91,13 +91,14 @@ async function start() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    ropeY = canvas.height / 2;
+    // ✅ set line positions
+    lineX = canvas.width / 2;
+    maxHeight = canvas.height * 0.6;
 
     message.innerText = "Loading AI...";
 
     model = await cocoSsd.load();
 
-    // ✅ now running
     running = true;
 
     startBtn.style.display = "none";
@@ -107,7 +108,7 @@ async function start() {
     loop();
 
   } catch (err) {
-    message.innerText = "Camera failed ❌";
+    message.innerText = "Camera error ❌";
     console.error(err);
     startBtn.disabled = false;
   }
@@ -136,51 +137,68 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ✅ green line
-  ctx.strokeStyle = "lime";
+  // ✅ VERTICAL LINE
+  ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(0, ropeY);
-  ctx.lineTo(canvas.width, ropeY);
+  ctx.moveTo(lineX, 0);
+  ctx.lineTo(lineX, canvas.height);
+  ctx.stroke();
+
+  // ✅ HEIGHT LINE
+  ctx.strokeStyle = "red";
+  ctx.beginPath();
+  ctx.moveTo(0, maxHeight);
+  ctx.lineTo(canvas.width, maxHeight);
   ctx.stroke();
 
   model.detect(video).then(predictions => {
 
     predictions.forEach(pred => {
-      if (pred.class === "sports ball" && pred.score > 0.3) {
+      if (pred.class === "sports ball" && pred.score > 0.2) {
 
-        const cx = pred.bbox[0] + pred.bbox[2] / 2;
-        const cy = pred.bbox[1] + pred.bbox[3] / 2;
+        const x = pred.bbox[0];
+        const y = pred.bbox[1];
+        const w = pred.bbox[2];
+        const h = pred.bbox[3];
 
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+
+        // store movement history
         history.push({x: cx, y: cy});
         if (history.length > 5) history.shift();
 
+        // draw ball
         ctx.fillStyle = "yellow";
         ctx.beginPath();
-        ctx.arc(cx, cy, 8, 0, 2*Math.PI);
+        ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
         ctx.fill();
       }
     });
 
+    // ✅ CROSSING + HEIGHT LOGIC
     if (history.length >= 2) {
       const prev = history[history.length - 2];
       const curr = history[history.length - 1];
 
-      const dy = curr.y - prev.y;
-      const predictedY = curr.y + dy;
+      const dx = curr.x - prev.x;
+      const predictedX = curr.x + dx;
 
-      if (curr.y < ropeY && predictedY >= ropeY) {
-        lastResult = "FAULT";
-        lastTime = Date.now();
-      }
+      // crossing left → right
+      if (curr.x < lineX && predictedX >= lineX) {
 
-      if (curr.y >= ropeY && predictedY < ropeY) {
-        lastResult = "GOOD";
+        if (curr.y > maxHeight) {
+          lastResult = "FAULT";
+        } else {
+          lastResult = "GOOD";
+        }
+
         lastTime = Date.now();
       }
     }
 
-    // ✅ flashing
+    // ✅ RESULT DISPLAY
     if (Date.now() - lastTime < SHOW_TIME) {
       if (lastResult === "GOOD") {
         document.body.style.background = "lime";
