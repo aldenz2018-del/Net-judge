@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <title>BasementBall</title>
 
 <style>
@@ -51,85 +50,65 @@ const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const startBtn = document.getElementById("startBtn");
-const message = document.getElementById("message");
+const btn = document.getElementById("startBtn");
+const msg = document.getElementById("message");
 
 let previousFrame = null;
 let ropeY = 0;
-
 let lastY = null;
 let lastTrigger = 0;
 
-// 🔊 sound
-function speakFault() {
+// 🔊 SOUND
+function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ STABLE START
-startBtn.onclick = function () {
+// ✅ ✅ START — SIMPLE + STABLE (DO NOT TOUCH THIS STRUCTURE)
+btn.onclick = function () {
 
-  message.innerText = "Requesting camera...";
+  msg.innerText = "Allow camera…";
 
-  navigator.mediaDevices.getUserMedia({
-    video: true
-  })
-  .then(stream => {
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(function(stream) {
 
-    video.srcObject = stream;
-    return video.play();
-  })
-  .then(() => {
+      video.srcObject = stream;
+      return video.play();
+    })
+    .then(function() {
 
-    // ✅ after camera works, try to switch to back camera
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      const backCam = devices.find(d =>
-        d.kind === "videoinput" &&
-        d.label.toLowerCase().includes("back")
-      );
+      // ✅ WAIT — THIS FIXES BLANK SCREEN
+      setTimeout(function() {
 
-      if (backCam) {
-        video.srcObject.getTracks().forEach(t => t.stop());
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
 
-        navigator.mediaDevices.getUserMedia({
-          video: { deviceId: backCam.deviceId }
-        }).then(s2 => {
-          video.srcObject = s2;
-          video.play();
-        });
-      }
+        ropeY = canvas.height * 0.5;
+
+        canvas.style.display = "block";
+        btn.style.display = "none";
+        msg.innerText = "";
+
+        previousFrame = null;
+        lastY = null;
+
+        loop();
+
+      }, 400);
+    })
+    .catch(function() {
+      msg.innerText = "Camera blocked ❌";
     });
-
-    setTimeout(() => {
-
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-
-      ropeY = canvas.height * 0.5;
-
-      canvas.style.display = "block";
-      startBtn.style.display = "none";
-      message.innerText = "";
-
-      previousFrame = null;
-      lastY = null;
-
-      loop();
-
-    }, 400);
-  })
-  .catch(() => {
-    message.innerText = "Camera blocked ❌";
-  });
 };
 
-// ✅ MAIN LOOP
+
+// ✅ ✅ MAIN LOOP
 function loop() {
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // draw rope
+  // rope line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -143,7 +122,6 @@ function loop() {
 
     let motionY = 0;
     let count = 0;
-    let totalMotion = 0;
 
     const curr = frame.data;
     const prev = previousFrame.data;
@@ -152,29 +130,30 @@ function loop() {
 
     for (let i = 0; i < curr.length; i += 16) {
 
-      const pixelIndex = i / 4;
-      const x = pixelIndex % canvas.width;
-      const y = Math.floor(pixelIndex / canvas.width);
+      const idx = i / 4;
+      const x = idx % canvas.width;
+      const y = Math.floor(idx / canvas.width);
+
+      // ONLY center strip
+      if (Math.abs(x - centerX) > 80) continue;
 
       const diff =
         Math.abs(curr[i] - prev[i]) +
         Math.abs(curr[i+1] - prev[i+1]) +
         Math.abs(curr[i+2] - prev[i+2]);
 
-      if (diff > 80) {
+      // tighter threshold
+      if (diff > 90) {
 
-        totalMotion++;
-
-        // ✅ focus on center + BELOW rope
-        if (Math.abs(x - centerX) < 80 && y >= ropeY) {
+        // ONLY BELOW ROPE
+        if (y >= ropeY) {
           motionY += y;
           count++;
         }
       }
     }
 
-    // ✅ ignore camera shake
-    if (count > 100 && totalMotion < 2000) {
+    if (count > 120) {
 
       const avgY = motionY / count;
 
@@ -182,22 +161,36 @@ function loop() {
 
         const speed = Math.abs(avgY - lastY);
 
-        // ✅ CROSSING detection
+        // ✅ ✅ CROSSING + SPEED FILTER
         if (
-          lastY < ropeY &&      // was ABOVE
-          avgY >= ropeY &&      // now BELOW
-          speed > 20 &&         // fast (ball-like)
+          lastY < ropeY &&   // was above
+          avgY >= ropeY &&   // now below
+          speed > 25 &&      // fast object (ball)
           Date.now() - lastTrigger > 2000
         ) {
 
           document.body.style.background = "red";
-          message.innerText = "FAULT";
+          msg.innerText = "FAULT";
 
-          speakFault();
+          speak();
 
           lastTrigger = Date.now();
 
           setTimeout(() => {
             document.body.style.background = "pink";
-            message.innerText = "";
-          }, 
+            msg.innerText = "";
+          }, 1500);
+        }
+      }
+
+      lastY = avgY;
+    }
+  }
+
+  previousFrame = frame;
+  requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
