@@ -8,7 +8,7 @@
 <style>
 body {
   margin: 0;
-  background: pink;
+  background: green;
   text-align: center;
   font-family: Arial;
 }
@@ -64,57 +64,43 @@ startBtn.onclick = function () {
 
   message.innerText = "Requesting camera...";
 
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" } // ✅ back camera directly
+  })
+  .then(stream => {
 
-      video.srcObject = stream;
-      return video.play();
-    })
-    .then(() => {
+    message.innerText = "Starting...";
 
-      // ✅ now try switching to BACK camera (safe method)
-      navigator.mediaDevices.enumerateDevices().then(devices => {
+    video.srcObject = stream;
 
-        const backCam = devices.find(d =>
-          d.kind === "videoinput" &&
-          d.label.toLowerCase().includes("back")
-        );
+    return video.play();
+  })
+  .then(() => {
 
-        if (backCam) {
+    // ✅ wait a moment for video to actually be ready
+    setTimeout(() => {
 
-          // stop current stream
-          video.srcObject.getTracks().forEach(t => t.stop());
+      // ✅ IMPORTANT: force correct sizing
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
 
-          // request back camera
-          navigator.mediaDevices.getUserMedia({
-            video: { deviceId: backCam.deviceId }
-          })
-          .then(newStream => {
-            video.srcObject = newStream;
-            return video.play();
-          });
-        }
-      });
+      ropeY = canvas.height * 0.5;
 
-      // ✅ continue startup as usual
-      setTimeout(() => {
+      canvas.style.display = "block";
+      startBtn.style.display = "none";
+      message.innerText = "";
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      previousFrame = null;
 
-        ropeY = canvas.height * 0.5;
+      loop();
 
-        canvas.style.display = "block";
-        startBtn.style.display = "none";
-        message.innerText = "";
+    }, 500); // ← slightly longer delay fixes blank screen
 
-        loop();
-
-      }, 300);
-    })
-    .catch(() => {
-      message.innerText = "Camera blocked ❌";
-    });
+  })
+  .catch(err => {
+    message.innerText = "Camera blocked ❌";
+    console.log(err);
+  });
 };
 // ✅ DETECTION LOOP
 function loop() {
