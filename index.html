@@ -5,7 +5,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ FIXED SCRIPT TAGS (CRITICAL) -->
+  <!-- ✅ REAL SCRIPT TAGS -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
@@ -44,7 +44,7 @@
 
     video {
       position: absolute;
-      opacity: 0;   /* ✅ important */
+      opacity: 0;
     }
   </style>
 </head>
@@ -64,13 +64,14 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
+// ✅ CLICK HANDLER
 startBtn.onclick = async () => {
   startBtn.style.display = "none";
-  message.innerText = "Allow camera";
+  message.innerText = "Starting camera...";
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
+      video: true
     });
 
     video.srcObject = stream;
@@ -99,4 +100,3 @@ startBtn.onclick = async () => {
 
 </body>
 </html>
-``
