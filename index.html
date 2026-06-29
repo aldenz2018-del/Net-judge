@@ -5,7 +5,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ Correct AI scripts -->
+  <!-- ✅ FIXED scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
@@ -17,25 +17,23 @@
       font-family: Arial;
     }
 
-    /* ✅ Top message */
     #message {
       position: absolute;
       top: 30px;
       width: 100%;
       text-align: center;
-      font-size: 32px;
+      font-size: 30px;
       color: white;
       z-index: 5;
     }
 
-    /* ✅ Start button BELOW message */
     #startBtn {
       position: absolute;
-      top: 120px;
+      top: 110px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 24px;
-      padding: 14px 25px;
+      font-size: 22px;
+      padding: 12px 20px;
       z-index: 10;
     }
 
@@ -61,21 +59,14 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-const ropeY = 250;  // adjust this!
+const ropeY = 250;
 
-let model;
-let history = [];
-let lastResult = null;
-let lastTime = 0;
-const DISPLAY_TIME = 7000;
-
+// ✅ START BUTTON
 startBtn.onclick = async () => {
   startBtn.style.display = "none";
+  message.innerText = "Allow camera";
 
   try {
-    message.innerText = "Allow camera access";
-
-    // ✅ STEP 1: Start camera (simple + reliable)
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment" }
     });
@@ -90,84 +81,47 @@ startBtn.onclick = async () => {
 
     message.innerText = "Loading AI...";
 
-    // ✅ STEP 2: Load AI AFTER camera works
-    model = await cocoSsd.load();
+    const model = await cocoSsd.load();
 
-    message.innerText = "";
+    message.innerText = "Ready 🎾";
+
+    function loop() {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // ✅ green line to line up net
+      ctx.strokeStyle = "lime";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, ropeY);
+      ctx.lineTo(canvas.width, ropeY);
+      ctx.stroke();
+
+      model.detect(video).then(predictions => {
+
+        // ✅ ONLY show circle — no result logic yet
+        predictions.forEach(pred => {
+          if (pred.class === "sports ball" && pred.score > 0.3) {
+            const cx = pred.bbox[0] + pred.bbox[2] / 2;
+            const cy = pred.bbox[1] + pred.bbox[3] / 2;
+
+            ctx.fillStyle = "yellow";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        });
+
+        requestAnimationFrame(loop);
+      });
+    }
 
     loop();
 
   } catch (err) {
-    message.innerText = "Camera error ❌";
+    message.innerText = "Camera failed ❌";
     console.error(err);
   }
 };
-
-function loop() {
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  // ✅ Draw green alignment line
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, ropeY);
-  ctx.lineTo(canvas.width, ropeY);
-  ctx.stroke();
-
-  model.detect(video).then(predictions => {
-
-    predictions.forEach(pred => {
-      if (pred.class === "sports ball" && pred.score > 0.2) {
-
-        const cx = pred.bbox[0] + pred.bbox[2] / 2;
-        const cy = pred.bbox[1] + pred.bbox[3] / 2;
-
-        // ✅ Store position history
-        history.push({x: cx, y: cy});
-        if (history.length > 5) history.shift();
-
-        // ✅ Draw tracker
-        ctx.fillStyle = "yellow";
-        ctx.beginPath();
-        ctx.arc(cx, cy, 8, 0, 2*Math.PI);
-        ctx.fill();
-      }
-    });
-
-    // ✅ Line crossing detection
-    if (history.length >= 2) {
-      let prev = history[history.length - 2];
-      let curr = history[history.length - 1];
-
-      if (prev.y < ropeY && curr.y >= ropeY) {
-        lastResult = "FAULT";
-        lastTime = Date.now();
-      }
-
-      if (prev.y >= ropeY && curr.y < ropeY) {
-        lastResult = "GOOD";
-        lastTime = Date.now();
-      }
-    }
-
-    // ✅ Full screen result flash
-    if (Date.now() - lastTime < DISPLAY_TIME) {
-      if (lastResult === "GOOD") {
-        document.body.style.background = "lime";
-        message.innerText = "GOOD";
-      }
-      if (lastResult === "FAULT") {
-        document.body.style.background = "red";
-        message.innerText = "FAULT";
-      }
-    } else {
-      document.body.style.background = "black";
-      message.innerText = "";
-    }
-
-    requestAnimationFrame(loop);
-  });
-}
 </script>
 
 </body>
