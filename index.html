@@ -42,7 +42,7 @@ video {
 <body>
 
 <div id="ui">
-  <div id="msg">Loading…</div>
+  <div id="msg">Tap START on ONE device</div>
   <button id="startBtn">START</button>
 </div>
 
@@ -57,29 +57,19 @@ const ctx = canvas.getContext("2d");
 const btn = document.getElementById("startBtn");
 const msg = document.getElementById("msg");
 
-// ✅ detect phone vs laptop
-const isPhone = /iPhone|Android/i.test(navigator.userAgent);
-
-// ✅ state
 let prevFrame = null;
 let ropeY = 0;
 let lastX = null;
 let lastTrigger = 0;
 
-// ✅ phone mode only
-if (!isPhone) {
-  msg.innerText = "Viewing… (use phone to start)";
-  btn.style.display = "none";
-}
-
-// 🔊 sound
+// ✅ SOUND
 function speak() {
   const s = new SpeechSynthesisUtterance("Fault");
   speechSynthesis.cancel();
   speechSynthesis.speak(s);
 }
 
-// ✅ START BUTTON (ONLY ON PHONE)
+// ✅ START (whoever taps this becomes the camera)
 btn.onclick = function () {
 
   msg.innerText = "Allow camera";
@@ -96,28 +86,26 @@ btn.onclick = function () {
 
     setTimeout(() => {
 
-      // ✅ IMPORTANT FIX (this was breaking your video)
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
 
       ropeY = canvas.height * 0.5;
 
-      msg.innerText = "";
       btn.style.display = "none";
+      msg.innerText = "";
 
       loop();
 
-    }, 500);
+    }, 400);
 
   })
-  .catch(err => {
+  .catch(() => {
     msg.innerText = "Camera blocked ❌";
-    console.log(err);
   });
 };
 
 
-// ✅ MAIN LOOP (DRAW VIDEO + OVERLAY)
+// ✅ LOOP
 function loop() {
 
   if (video.readyState >= 2) {
@@ -126,7 +114,7 @@ function loop() {
 
   const midX = canvas.width / 2;
 
-  // ✅ vertical crossing line
+  // vertical line
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -134,7 +122,7 @@ function loop() {
   ctx.lineTo(midX, canvas.height);
   ctx.stroke();
 
-  // ✅ rope line
+  // rope line
   ctx.strokeStyle = "cyan";
   ctx.lineWidth = 3;
   ctx.beginPath();
