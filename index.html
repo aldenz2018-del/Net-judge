@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background: green;
+      background: pink;
       color: black;
       font-family: Arial;
       text-align: center;
@@ -47,7 +47,7 @@
 
 <body>
 
-<div id="message">Tap START</div>
+<div id="message">Happy 11th Birthday Mattie!</div>
 
 <button id="startBtn">START</button>
 <button id="stopBtn">STOP</button>
@@ -193,5 +193,14 @@ function loop() {
         message.innerText = "FAULT";
         speakFault();
         lastFaultTime = Date.now();
+      }
+    }
+  }
 
-    
+  previousFrame = frame;
+  animationId = requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
