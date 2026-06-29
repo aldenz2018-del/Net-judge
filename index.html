@@ -5,7 +5,6 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- ✅ REAL SCRIPT TAGS -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
@@ -20,19 +19,16 @@
     #message {
       position: absolute;
       width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      text-align: center;
+      top: 20px;
       font-size: 40px;
       color: white;
-      text-align: center;
       z-index: 5;
     }
 
     #startBtn {
       position: absolute;
-      top: 20px;
+      top: 85px;
       left: 50%;
       transform: translateX(-50%);
       font-size: 20px;
@@ -62,80 +58,110 @@ const ctx = canvas.getContext("2d");
 const message = document.getElementById("message");
 const startBtn = document.getElementById("startBtn");
 
-// adjust for your net
-const netTop = 180;
-const netBottom = 300;
+// 🔧 adjust this
+const ropeY = 250;
 
 let lastResult = null;
 let lastTime = 0;
 const DISPLAY_TIME = 7000;
 
-startBtn.onclick = start;
+// ✅ TRACKING STATE
+let history = [];
 
-async function start() {
+startBtn.onclick = async () => {
   startBtn.style.display = "none";
-  message.innerText = "Requesting camera...";
+  message.innerText = "Starting...";
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
-    });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "environment" }
+  });
 
-    video.srcObject = stream;
-    await video.play();
+  video.srcObject = stream;
+  await video.play();
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  await new Promise(r => video.onloadedmetadata = r);
 
-    message.innerText = "Loading AI...";
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
-    const model = await cocoSsd.load();
+  message.innerText = "Loading AI...";
+  const model = await cocoSsd.load();
 
-    message.innerText = "";
+  message.innerText = "";
 
-    function loop() {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  function loop() {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      model.detect(video).then(predictions => {
-        predictions.forEach(pred => {
-          if (pred.class === "sports ball" && pred.score > 0.2) {
-            const centerY = pred.bbox[1] + pred.bbox[3] / 2;
+    // ✅ draw rope line
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, ropeY);
+    ctx.lineTo(canvas.width, ropeY);
+    ctx.stroke();
 
-            if (centerY > netBottom) {
-              lastResult = "FAULT";
-              lastTime = Date.now();
-            } else if (centerY >= netTop && centerY <= netBottom) {
-              lastResult = "GOOD";
-              lastTime = Date.now();
-            }
-          }
-        });
+    model.detect(video).then(predictions => {
 
-        // full screen flash
-        if (Date.now() - lastTime < DISPLAY_TIME) {
-          if (lastResult === "GOOD") {
-            document.body.style.background = "lime";
-            message.innerText = "GOOD";
-          } else if (lastResult === "FAULT") {
-            document.body.style.background = "red";
-            message.innerText = "FAULT";
-          }
-        } else {
-          document.body.style.background = "black";
-          message.innerText = "";
+      let found = false;
+
+      predictions.forEach(pred => {
+        if (pred.class === "sports ball" && pred.score > 0.2) {
+
+          const cx = pred.bbox[0] + pred.bbox[2] / 2;
+          const cy = pred.bbox[1] + pred.bbox[3] / 2;
+
+          found = true;
+
+          // ✅ store history
+          history.push({ x: cx, y: cy, t: Date.now() });
+          if (history.length > 5) history.shift();
+
+          // draw ball
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(cx, cy, 8, 0, 2*Math.PI);
+          ctx.fill();
+        }
+      });
+
+      // ✅ CROSSING DETECTION (key upgrade!)
+      if (history.length >= 2) {
+        let prev = history[history.length - 2];
+        let curr = history[history.length - 1];
+
+        // did it cross the line?
+        if (prev.y < ropeY && curr.y >= ropeY) {
+          lastResult = "FAULT";
+          lastTime = Date.now();
         }
 
-        requestAnimationFrame(loop);
-      });
-    }
+        if (prev.y >= ropeY && curr.y < ropeY) {
+          lastResult = "GOOD";
+          lastTime = Date.now();
+        }
+      }
 
-    loop();
+      // ✅ FULL SCREEN FLASH
+      if (Date.now() - lastTime < DISPLAY_TIME) {
+        if (lastResult === "GOOD") {
+          document.body.style.background = "lime";
+          message.innerText = "GOOD";
+        }
+        if (lastResult === "FAULT") {
+          document.body.style.background = "red";
+          message.innerText = "FAULT";
+        }
+      } else {
+        document.body.style.background = "black";
+        message.innerText = "";
+      }
 
-  } catch (err) {
-    message.innerText = "Camera Error!";
-    console.error(err);
+      requestAnimationFrame(loop);
+    });
   }
-}
+
+  loop();
+};
 </script>
 
 </body>
