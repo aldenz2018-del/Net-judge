@@ -68,12 +68,35 @@ startBtn.onclick = function () {
     .then(stream => {
 
       video.srcObject = stream;
-
       return video.play();
     })
     .then(() => {
 
-      // ✅ small delay (KEY)
+      // ✅ now try switching to BACK camera (safe method)
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+
+        const backCam = devices.find(d =>
+          d.kind === "videoinput" &&
+          d.label.toLowerCase().includes("back")
+        );
+
+        if (backCam) {
+
+          // stop current stream
+          video.srcObject.getTracks().forEach(t => t.stop());
+
+          // request back camera
+          navigator.mediaDevices.getUserMedia({
+            video: { deviceId: backCam.deviceId }
+          })
+          .then(newStream => {
+            video.srcObject = newStream;
+            return video.play();
+          });
+        }
+      });
+
+      // ✅ continue startup as usual
       setTimeout(() => {
 
         canvas.width = video.videoWidth;
@@ -93,7 +116,6 @@ startBtn.onclick = function () {
       message.innerText = "Camera blocked ❌";
     });
 };
-
 // ✅ DETECTION LOOP
 function loop() {
 
